@@ -75,9 +75,8 @@ func (a *app) updateDialog(c *ui.Context) {
 			case u.err != "":
 				// Neither GitHub nor its mirrors: the installers wait on a
 				// cloud drive reachable from anywhere.
-				if manualDownloadURL != "" && settingButton(c.Key("manual"), ink, "从夸克网盘下载", iconDownload, false, false).Clicked() {
-					mygo.Shell.OpenExternal(manualDownloadURL)
-				}
+				// Keep the manual download action available in code for later,
+				// but hide it from the current update dialog.
 				later("close", "关闭")
 				if primaryButton(c.Key("retry"), "重试", iconReload, p, false).Clicked() {
 					a.checkForUpdates()

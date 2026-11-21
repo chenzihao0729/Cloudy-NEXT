@@ -36,6 +36,9 @@ type settings struct {
 	// Quality is the level of the streams: standard, higher, exhigh,
 	// lossless or hires.
 	Quality string `json:"quality"`
+	// QQFallback uses the selected script to resolve QQ Music playback URLs.
+	QQFallback   bool   `json:"qqFallback,omitempty"`
+	SourcePlugin string `json:"sourcePlugin,omitempty"`
 	// Appearance is light, dark, or system to follow the system.
 	Appearance string `json:"appearance"`
 	// Font is the font of the app's text (uiFonts): empty for the default.
@@ -163,6 +166,7 @@ type settings struct {
 	// StageSparks throws sparks off each word on the stage as it is sung,
 	// whatever its style.
 	StageSparks bool `json:"stageSparks,omitempty"`
+	StageHiRes  bool `json:"stageHiRes,omitempty"`
 	// Volume is where the volume was left, from 0 to 1.
 	Volume float64 `json:"volume"`
 	// Normalize evens out the loudness of tracks, by what NetEase
@@ -254,7 +258,7 @@ type settings struct {
 }
 
 func defaultSettings() settings {
-	return settings{UpdateChecks: true, BarSpin: true, GlobalKeys: true, NotchActivity: true, Quality: "exhigh", Appearance: "system", LiquidGlass: true, SidebarGlass: true, MainGlass: true, NpLight: true, GlowLevel: 0.5, GlassClear: 0.6, GlassBend: 0.3, GlassPanels: true, Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, LyricTrans: true, LyricBlur: true, NpCalm: true, LyricBlurLevel: 0.5, MoreWords: true, LyricTilt: 0.5, LyricBounce: 0.5, DeskWords: true}
+	return settings{Crossfade: true, CrossfadeSec: 2, BarSpin: true, GlobalKeys: true, NotchActivity: true, Quality: "exhigh", Appearance: "system", LiquidGlass: true, SidebarGlass: true, MainGlass: true, NpLight: true, GlowLevel: 0.5, GlassClear: 0.6, GlassBend: 0.3, GlassPanels: true, Volume: 0.8, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, LyricTrans: true, LyricBlur: true, NpCalm: true, LyricBlurLevel: 0.5, MoreWords: true, LyricTilt: 0.5, LyricBounce: 0.5, DeskWords: true}
 }
 
 func (s settings) playerGlass() bool  { return !s.PowerSaver && (s.GlobalGlass || s.LiquidGlass) }
@@ -288,9 +292,13 @@ func settingsPath() (string, error) {
 // kept its data under.
 const oldName = "网易云音乐"
 
-// lastName is what the app was called before Cloudy. The identifier stayed
+// lastName is what the app was called before Cloudy-NEXT. The identifier stayed
 // as it was then, so the login, kept under it, goes on by itself.
 const lastName = "Cloud-nya"
+
+// previousName is the immediately previous product name, whose data must
+// continue under Cloudy-NEXT after the branding change.
+const previousName = "Cloudy"
 
 // moveOldData moves the user data and the song cache kept under an old name
 // to the directories of the app's name, unless those hold something already:
@@ -308,7 +316,7 @@ func moveOldData() {
 // the app's old names that has any: once one has moved, dir holds something
 // and the older ones stay where they are.
 func moveFromOldNames(dir string) {
-	for _, old := range []string{lastName, oldName} {
+	for _, old := range []string{previousName, lastName, oldName} {
 		moveDir(filepath.Join(filepath.Dir(dir), old), dir)
 	}
 }

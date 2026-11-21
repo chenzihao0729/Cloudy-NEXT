@@ -42,10 +42,10 @@ func radioLabel(name string) string {
 	return "私人 FM"
 }
 
-func playable(tracks []netease.Track) []netease.Track {
+func playable(tracks []netease.Track, allowVIPSource bool) []netease.Track {
 	var out []netease.Track
 	for _, t := range tracks {
-		if t.Playable() {
+		if t.Playable() || allowVIPSource && t.RequiresVIP() {
 			out = append(out, t)
 		}
 	}
@@ -67,6 +67,7 @@ func (a *app) likedPlaylist() int64 {
 // cannot.
 func (a *app) radioFeed(name string) func(got func([]netease.Track)) {
 	return func(got func([]netease.Track)) {
+		allowVIPSource := a.canUseVIPSource()
 		var fetch func() ([]netease.Track, error)
 		switch {
 		case strings.HasPrefix(name, "fm:"):
@@ -101,7 +102,7 @@ func (a *app) radioFeed(name string) func(got func([]netease.Track)) {
 				if err != nil {
 					break
 				}
-				tracks = playable(more)
+				tracks = playable(more, allowVIPSource)
 			}
 			a.post(func() { got(tracks) })
 		}()
@@ -229,13 +230,14 @@ func (a *app) startHeartMode() {
 	}
 	liked := a.playlists[pid]
 	req := a.requestRadio(heartRadio)
+	allowVIPSource := a.canUseVIPSource()
 	go func() {
 		if seed == nil {
 			if liked == nil {
 				liked, _ = netease.PlaylistDetail(pid)
 			}
 			if liked != nil {
-				if ok := playable(liked.Tracks); len(ok) > 0 {
+				if ok := playable(liked.Tracks, allowVIPSource); len(ok) > 0 {
 					seed = &ok[rand.IntN(len(ok))]
 				}
 			}
@@ -253,7 +255,7 @@ func (a *app) startHeartMode() {
 				a.toast = "心动模式暂时无法开启，请稍后再试"
 				return
 			}
-			more = playable(more)
+			more = playable(more, allowVIPSource)
 			if fromPlaying && a.pl.Current() != nil && a.pl.Current().ID == seed.ID {
 				a.pl.RadioFrom(heartRadio, more, a.radioFeed(heartRadio))
 				return

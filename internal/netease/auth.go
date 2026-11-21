@@ -177,6 +177,7 @@ type Profile struct {
 	UserID    int64  `json:"userId"`
 	Nickname  string `json:"nickname"`
 	AvatarURL string `json:"avatarUrl"`
+	VIPType   int    `json:"vipType"`
 }
 
 // Account returns the profile of who is signed in, or nil.

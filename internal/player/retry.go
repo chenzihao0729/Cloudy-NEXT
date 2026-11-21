@@ -28,7 +28,7 @@ func (p *Player) retryLoad(skipped, direction int, err error) bool {
 				return
 			}
 			p.retryTimer = nil
-			p.loadAttempt(p.at, skipped, true, p.pending, direction, p.retries+1)
+			p.loadAttempt(p.at, skipped, true, p.pending, direction, p.retries+1, p.retryExcluded)
 		})
 	})
 	p.sync()

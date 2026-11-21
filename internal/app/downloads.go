@@ -61,17 +61,48 @@ type songKey struct{}
 
 func (songKey) key(tr netease.Track) string { return strconv.FormatInt(tr.ID, 10) }
 
+// defaultAppFolder is the directory containing the installed executable.
+// Keeping defaults beside the executable makes them follow the selected
+// installation drive (for example D:\Cloudy-NEXT).
+func defaultAppFolder() string {
+	exe, err := os.Executable()
+	if err == nil {
+		if dir := filepath.Dir(exe); dir != "" {
+			return dir
+		}
+	}
+	return "."
+}
+
+// useInstallData keeps application state beside the installed executable.
+// Existing per-user data is moved once when the destination is empty.
+func useInstallData() {
+	root := defaultAppFolder()
+	data := filepath.Join(root, "Data")
+	cache := filepath.Join(root, "Cache")
+	oldData, dataErr := mygo.App.Path(mygo.PathUserData)
+	oldCache, cacheErr := mygo.App.Path(mygo.PathCache)
+	if dataErr == nil && oldData != data && dirEmptyOrMissing(data) {
+		_ = os.Remove(data)
+		_ = os.Rename(oldData, data)
+	}
+	if cacheErr == nil && oldCache != cache && dirEmptyOrMissing(cache) {
+		_ = os.Remove(cache)
+		_ = os.Rename(oldCache, cache)
+	}
+	mygo.App.SetPath(mygo.PathUserData, data)
+	mygo.App.SetPath(mygo.PathCache, cache)
+}
+
+func dirEmptyOrMissing(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	return os.IsNotExist(err) || (err == nil && len(entries) == 0)
+}
+
 // defaultDownloadFolder is where songs go until the listener names another
-// folder: Cloudy Downloads among their music.
+// folder: Downloads beside the installed application.
 func (a *app) defaultDownloadFolder() string {
-	dir, err := mygo.App.Path(mygo.PathMusic)
-	if err != nil || dir == "" {
-		dir = os.Getenv("USERPROFILE")
-	}
-	if dir == "" {
-		dir = "."
-	}
-	return filepath.Join(dir, "Cloudy Downloads")
+	return filepath.Join(defaultAppFolder(), "Downloads")
 }
 
 // downloadFolder is where downloaded songs are kept.

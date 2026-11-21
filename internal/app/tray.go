@@ -1,29 +1,17 @@
 package app
 
 import (
-	_ "embed"
 	"log"
 	"runtime"
 
 	"github.com/egoist/mygo"
+	"netease-music-mygo/resources"
 )
 
 // The app's icon in the menu bar on macOS, as the settings choose
 // (appIcons), and always in the notification area on Windows and Linux.
 // While it shows, closing the window leaves the music playing there, until
 // the listener quits; the icon opens the window again.
-
-// trayTemplate is the record and tonearm of the app's icon, black on
-// transparent for macOS to tint: 15.6 points tall in the menu bar's 18, at
-// 2×, as icon/tray draws it.
-//
-//go:embed tray/tray-template.png
-var trayTemplate []byte
-
-// trayColor is the app's icon, for the notification area.
-//
-//go:embed tray/tray.png
-var trayColor []byte
 
 // showsTray tells whether the app's icon shows in the menu bar or the
 // notification area.
@@ -60,15 +48,11 @@ func (a *app) syncDock() {
 func (a *app) applyTray() {
 	switch show := showsTray(a.settings); {
 	case show && a.tray == nil:
-		icon, template := trayColor, false
-		if runtime.GOOS == "darwin" {
-			icon, template = trayTemplate, true
-		}
 		menu := a.trayMenu()
 		if runtime.GOOS == "windows" {
 			menu = nil // Right click belongs to the independent native-UI flyout.
 		}
-		t, err := mygo.NewTray(mygo.TrayOptions{ID: "cloudmusic", Icon: icon, IconIsTemplate: template, ToolTip: mygo.App.Name(), Menu: menu})
+		t, err := mygo.NewTray(mygo.TrayOptions{ID: "cloudy-next", Icon: resources.TrayIcon, ToolTip: "Cloudy-NEXT", Menu: menu})
 		if err != nil {
 			log.Println("tray:", err)
 			return

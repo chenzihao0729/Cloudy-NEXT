@@ -1,6 +1,7 @@
 package player
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -84,6 +85,14 @@ func (c *Cache) SetDir(dir string) {
 
 func cacheKey(id int64, level string) string { return fmt.Sprintf("%d-%s", id, level) }
 
+func cacheKeyFor(id int64, st *netease.Stream) string {
+	if st.Source == "" {
+		return cacheKey(id, st.Level)
+	}
+	identity := sha256.Sum256([]byte(st.Source + "\x00" + st.SourceID))
+	return fmt.Sprintf("%d-alt-%x-%s", id, identity[:8], st.Level)
+}
+
 // keepable reports whether a song of level and type ext may be kept: they
 // name its file, so only those known, which keep it in the cache's folder.
 func keepable(level, ext string) bool {
@@ -100,29 +109,44 @@ func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool
 	at := max(slices.Index(netease.Levels, level), 0)
 	for _, lv := range netease.Levels[at:] {
 		key := cacheKey(id, lv)
-		meta, err := os.ReadFile(filepath.Join(dir, key+".json"))
-		if err != nil {
-			continue
+		if dl, st, ok := c.openEntry(dir, key, lv, false); ok {
+			return dl, st, true
 		}
-		var st netease.Stream
-		if json.Unmarshal(meta, &st) != nil || !keepable(lv, st.Type) {
-			continue
+	}
+	for _, lv := range netease.Levels[at:] {
+		keys, _ := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%d-alt-*-%s.json", id, lv)))
+		slices.Sort(keys)
+		for _, metaPath := range keys {
+			key := strings.TrimSuffix(filepath.Base(metaPath), ".json")
+			if dl, st, ok := c.openEntry(dir, key, lv, true); ok {
+				return dl, st, true
+			}
 		}
-		path := filepath.Join(dir, key+"."+st.Type)
-		f, err := os.Open(path)
-		if err != nil {
-			continue
-		}
-		if info, err := f.Stat(); err != nil || info.Size() != st.Size {
-			f.Close()
-			continue
-		}
-		// Played now: the last to go.
-		now := time.Now()
-		os.Chtimes(path, now, now)
-		return opened(f, st.Size), &st, true
 	}
 	return nil, nil, false
+}
+
+func (c *Cache) openEntry(dir, key, level string, alternate bool) (*download, *netease.Stream, bool) {
+	meta, err := os.ReadFile(filepath.Join(dir, key+".json"))
+	if err != nil {
+		return nil, nil, false
+	}
+	var st netease.Stream
+	if json.Unmarshal(meta, &st) != nil || !keepable(level, st.Type) || (st.Source != "") != alternate {
+		return nil, nil, false
+	}
+	path := filepath.Join(dir, key+"."+st.Type)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, false
+	}
+	if info, err := f.Stat(); err != nil || info.Size() != st.Size {
+		f.Close()
+		return nil, nil, false
+	}
+	now := time.Now()
+	os.Chtimes(path, now, now)
+	return opened(f, st.Size), &st, true
 }
 
 // download fetches the song into a file. Songs the cache does not keep use
@@ -131,10 +155,10 @@ func (c *Cache) download(id int64, st *netease.Stream) *download {
 	part := c.part(st)
 	if part == nil {
 		part, _ = os.CreateTemp("", streamSpools)
-		return startDownload(st.URL, st.Size, part, nil, nil)
+		return startDownload(st.URL, st.Size, part, nil, nil, st.Referer, st.UserAgent)
 	}
 	keep, settle := c.keeper(id, st)
-	return startDownload(st.URL, st.Size, part, keep, settle)
+	return startDownload(st.URL, st.Size, part, keep, settle, st.Referer, st.UserAgent)
 }
 
 // part makes a file for a song of the stream st to come into, or returns
@@ -192,7 +216,7 @@ func (c *Cache) keep(id int64, st *netease.Stream, part string, n int64) (string
 	if !keepable(kept.Level, kept.Type) {
 		return part, false
 	}
-	key := cacheKey(id, kept.Level)
+	key := cacheKeyFor(id, &kept)
 	meta, _ := json.Marshal(kept)
 	path := filepath.Join(dir, key+"."+kept.Type)
 	// keep is called with the download lock held, and the decoder waits

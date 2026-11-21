@@ -72,6 +72,7 @@ func (a *app) queueRows(c *ui.Context, list *ui.ListState, at *int, look queueLo
 	ui.List(c.Key("queue"), list, len(order), func(r int) {
 		i := order[r]
 		tr := &queue[i]
+		canPlay := a.canPlayTrack(*tr)
 		playing := r == cur
 		row := ui.ButtonBase(c.Key(tr.ID)).Height(rowH).PaddingX(10).Gap(14).Radius(14).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
 		a.contextMenu(row, look.dark, func() [][]menuAction {
@@ -87,7 +88,7 @@ func (a *app) queueRows(c *ui.Context, list *ui.ListState, at *int, look queueLo
 		case row.Hovered():
 			row.Background(look.hover)
 		}
-		if !tr.Playable() {
+		if !canPlay {
 			row.Opacity(0.4)
 		}
 		row.Children(func() {
@@ -109,7 +110,7 @@ func (a *app) queueRows(c *ui.Context, list *ui.ListState, at *int, look queueLo
 				}
 			})
 		})
-		if row.Clicked() && tr.Playable() && !playing {
+		if row.DoubleClicked() && canPlay && !playing {
 			pl.Jump(i)
 		}
 	}).Grow(1).Padding(8, 0, 40, 0).Gap(2)
@@ -123,7 +124,7 @@ func (a *app) queueButton(c *ui.Context, color ui.Color, size float32) {
 	if q.open {
 		tint = a.pal.accent
 	}
-	b := iconButton(c.Key("queue-button"), iconQueue, size, tint, "播放列表")
+	b := iconButton(c.Key("queue-button"), iconQueue, size, tint, "播放列表").Tooltip("播放列表")
 	if b.Clicked() {
 		q.open = !q.open
 	}

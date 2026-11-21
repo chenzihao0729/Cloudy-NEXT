@@ -36,6 +36,7 @@ func fakeUpdateCheck(asked chan<- struct{}) func() {
 func TestUpdateSettings(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
+	a.settings.UpdateChecks = true
 	a.updates = true
 	a.settingsView.tab = settingsAbout
 	tt := ui.NewTester(a.settingsBody, 560, 3000)
@@ -60,8 +61,8 @@ func TestUpdateSettings(t *testing.T) {
 	if a.settings.UpdateChecks {
 		t.Fatal("checks for updates still")
 	}
-	if tt.HasText("自动安装更新") {
-		t.Error("offers installing updates with no checks to find them")
+	if !tt.HasText("自动安装更新") {
+		t.Error("hides the update install preference when reminders are off")
 	}
 }
 

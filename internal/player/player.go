@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,6 +45,15 @@ type Player struct {
 	// a downloaded song plays from it wherever it was started from, not
 	// from the network. It is called off the window's goroutine.
 	LocalFile func(id int64) string
+	// Fallback resolves a matched third-party stream after NetEase explicitly
+	// reports that the track is unavailable.
+	Fallback func(context.Context, netease.Track, string, []string) (*netease.Stream, error)
+	// FallbackLyrics and FallbackCover fetch metadata for the exact matched
+	// third-party song, if set.
+	FallbackLyrics func(context.Context, string) string
+	FallbackCover  func(context.Context, string) ([]byte, error)
+	// PreferFallback selects the configured source before NetEase for this track.
+	PreferFallback func(netease.Track) bool
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
@@ -82,8 +92,9 @@ type Player struct {
 
 	// cover is the track's cover image as fetched, once it is, and coverOf
 	// the track it is of.
-	cover   []byte
-	coverOf int64
+	cover       []byte
+	coverOf     int64
+	qqLyricsGen int
 
 	track  *netease.Track
 	out    *audio.Player
@@ -92,14 +103,15 @@ type Player struct {
 	fade   fader
 	gain   float64 // the current track's normalizing gain
 	// measureStop stops measuring the loudness of the track, if it is.
-	measureStop context.CancelFunc
-	loading     bool
-	playing     bool // what the listener wants: false while paused
-	err         string
-	gen         int                // counts loads, to drop the results of stale ones
-	cancelLoad  context.CancelFunc // stops a load that is no longer selected
-	retryTimer  *time.Timer
-	retries     int // reconnections for the current selection
+	measureStop   context.CancelFunc
+	loading       bool
+	playing       bool // what the listener wants: false while paused
+	err           string
+	gen           int                // counts loads, to drop the results of stale ones
+	cancelLoad    context.CancelFunc // stops a load that is no longer selected
+	retryTimer    *time.Timer
+	retries       int // reconnections for the current selection
+	retryExcluded []string
 
 	// Crossfade, if set, is how long songs fade into each other as one
 	// ends: 0 for not at all.
@@ -121,6 +133,9 @@ type Player struct {
 	seeking bool
 	seekTo  time.Duration
 	seekGen int
+	// timeline is set while the system is told the position every
+	// second, as it plays (keepTimeline).
+	timeline bool
 }
 
 func New(post func(func())) *Player {
@@ -170,6 +185,38 @@ func (p *Player) sync() {
 		state = mygo.PlaybackPlaying
 	}
 	mygo.NowPlaying.SetPlayback(state, p.Position())
+	if p.playing {
+		p.keepTimeline()
+	}
+}
+
+// timelineEvery is how often the system hears the position as it plays.
+const timelineEvery = time.Second
+
+// keepTimeline tells the system the position every second while a song
+// plays. Windows' media controls do not count on from the position they
+// were given, and lyrics apps reading them stood still at it (#32).
+func (p *Player) keepTimeline() {
+	if p.timeline || !mygo.App.IsReady() {
+		return
+	}
+	p.timeline = true
+	var tick func()
+	tick = func() {
+		time.AfterFunc(timelineEvery, func() {
+			mygo.RunOnMain(func() {
+				if !p.playing || p.track == nil {
+					p.timeline = false
+					return
+				}
+				if !p.seeking {
+					mygo.NowPlaying.SetPlayback(mygo.PlaybackPlaying, p.Position())
+				}
+				tick()
+			})
+		})
+	}
+	tick()
 }
 
 // announce shows the system the track, and its cover once loaded.
@@ -212,6 +259,8 @@ func (p *Player) ended() {
 		p.heardGen = 0
 		p.out.Seek(0)
 		p.out.Play()
+		p.fade.fade(1, fadeIn, nil)
+		p.sync()
 		return
 	}
 	if p.at+1 >= len(p.order) && p.feed != nil {
@@ -582,7 +631,7 @@ func (p *Player) TogglePlay() {
 	}
 	p.playing = true
 	if !p.seeking && !out.Playing() {
-		if out.Position() >= out.Duration()-time.Second {
+		if d := out.Duration(); d > 0 && out.Position() >= d-time.Second {
 			out.Seek(0)
 		}
 		out.Play()
@@ -702,6 +751,15 @@ func (p *Player) measureLater(gen int, s stream, durationMs int64, keys ...strin
 	loud := p.Loud
 	go func() {
 		defer cancel()
+		// Let playback fill its initial decode buffer before a second
+		// concurrent decoder starts reading the same download.
+		timer := time.NewTimer(1500 * time.Millisecond)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
 		ms, err := openSharedContext(ctx, dl, durationMs)
 		if err != nil {
 			return
@@ -804,14 +862,23 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration, di
 	p.loadAttempt(at, skipped, play, from, direction, 0)
 }
 
-func (p *Player) loadAttempt(at, skipped int, play bool, from time.Duration, direction, retries int) {
+func (p *Player) loadAttempt(at, skipped int, play bool, from time.Duration, direction, retries int, excludedSources ...[]string) {
 	// Moving on to another track: how long this one was listened to. A
 	// retry of the same one is no move.
 	if at >= 0 && at < len(p.order) && p.track != nil && p.queue[p.order[at]].ID != p.track.ID {
 		p.tellListened(false)
 	}
 	level := p.level()
+	var excluded []string
+	if len(excludedSources) > 0 {
+		excluded = excludedSources[0]
+	}
+	p.retryExcluded = excluded
 	pre := p.takePreload(at, level, from, retries)
+	if len(excluded) > 0 && pre != nil {
+		pre.discard()
+		pre = nil
+	}
 	crossIn := p.fadeInNext
 	p.fadeInNext = 0
 	p.stop()
@@ -828,10 +895,12 @@ func (p *Player) loadAttempt(at, skipped int, play bool, from time.Duration, dir
 	p.cancelLoad = cancel
 	p.at = at
 	t := p.queue[p.order[at]]
+	preferFallback := p.PreferFallback != nil && p.PreferFallback(t)
 	p.track = &t
 	p.loading, p.playing, p.err = true, play, ""
 	p.awaiting = false
 	p.lyrics, p.lyricsLoaded = nil, false
+	p.qqLyricsGen = 0
 	p.pending = from
 	p.announce(&t, nil)
 	p.refill()
@@ -863,7 +932,7 @@ func (p *Player) loadAttempt(at, skipped int, play bool, from time.Duration, dir
 			}
 			if err == nil {
 				p.post(func() {
-					if gen == p.gen {
+					if gen == p.gen && (p.info == nil || p.info.Source != "qq") {
 						p.announce(&t, cover)
 						if p.Changed != nil {
 							p.Changed()
@@ -884,7 +953,9 @@ func (p *Player) loadAttempt(at, skipped int, play bool, from time.Duration, dir
 			}
 			p.post(func() {
 				if gen == p.gen {
-					p.lyrics = lines
+					if p.qqLyricsGen != gen {
+						p.lyrics = lines
+					}
 					p.lyricsLoaded = true
 				}
 			})
@@ -894,7 +965,7 @@ func (p *Player) loadAttempt(at, skipped int, play bool, from time.Duration, dir
 				if more := MoreWords(t); len(more) > 0 {
 					more = lyrics.KeepTranslations(more, lines)
 					p.post(func() {
-						if gen == p.gen {
+						if gen == p.gen && p.qqLyricsGen != gen {
 							p.lyrics = more
 							if p.Changed != nil {
 								p.Changed()
@@ -925,7 +996,7 @@ func (p *Player) loadAttempt(at, skipped int, play bool, from time.Duration, dir
 				err = ctx.Err()
 			}
 		} else {
-			info, s, err = p.openContext(ctx, t, level)
+			info, s, err = p.openContextPreferred(ctx, t, level, preferFallback, excluded)
 		}
 		p.post(func() {
 			if gen != p.gen {
@@ -948,6 +1019,14 @@ func (p *Player) opened(gen int, t netease.Track, info *netease.Stream, s stream
 	}
 	p.loading = false
 	if err != nil {
+		var sourceErr *sourceHTTPError
+		var status *streamHTTPError
+		if errors.As(err, &sourceErr) && errors.As(sourceErr, &status) && status.code == http.StatusForbidden {
+			excluded := append(append([]string(nil), p.retryExcluded...), sourceErr.source)
+			excluded = uniqueStrings(excluded)
+			p.loadAttempt(p.at, skipped, p.playing, p.pending, direction, p.retries+1, excluded)
+			return
+		}
 		if p.retryLoad(skipped, direction, err) {
 			return
 		}
@@ -1012,9 +1091,56 @@ func (p *Player) opened(gen int, t netease.Track, info *netease.Stream, s stream
 		p.out.Play()
 		p.fade.fade(1, crossIn, nil)
 	}
+	p.fallbackMetadata(gen, t, info)
 	p.watchDone = make(chan struct{})
 	p.watchEnd(gen, p.out, time.Duration(float64(t.Length())/p.curSpeed), p.watchDone)
 	p.sync()
+}
+
+func (p *Player) fallbackMetadata(gen int, t netease.Track, info *netease.Stream) {
+	if info == nil || info.Source != "qq" || info.SourceID == "" {
+		return
+	}
+	if p.FallbackLyrics != nil {
+		fetch := p.FallbackLyrics
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+			defer cancel()
+			lines := lyrics.FromText(fetch(ctx, info.SourceID))
+			if len(lines) == 0 {
+				return
+			}
+			p.post(func() {
+				if gen == p.gen && p.info == info {
+					p.qqLyricsGen = gen
+					p.lyrics = lines
+					p.lyricsLoaded = true
+					if p.Changed != nil {
+						p.Changed()
+					}
+				}
+			})
+		}()
+	}
+	if p.FallbackCover != nil && info.CoverURL != "" {
+		fetch := p.FallbackCover
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+			defer cancel()
+			cover, err := fetch(ctx, info.CoverURL)
+			if err != nil {
+				return
+			}
+			p.post(func() {
+				if gen == p.gen && p.info == info {
+					p.announce(&t, cover)
+					if p.Changed != nil {
+						p.Changed()
+					}
+				}
+			})
+		}()
+	}
 }
 
 // open opens track t's audio at level: kept in the cache, or else
@@ -1064,6 +1190,31 @@ func openLocal(path string, d int64) (*netease.Stream, stream, error) {
 }
 
 func (p *Player) openContext(ctx context.Context, t netease.Track, level string) (*netease.Stream, stream, error) {
+	preferFallback := p.PreferFallback != nil && p.PreferFallback(t)
+	return p.openContextPreferred(ctx, t, level, preferFallback, nil)
+}
+
+type sourceHTTPError struct {
+	source string
+	err    error
+}
+
+func (e *sourceHTTPError) Error() string { return e.err.Error() }
+func (e *sourceHTTPError) Unwrap() error { return e.err }
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]bool, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != "" && !seen[value] {
+			seen[value] = true
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func (p *Player) openContextPreferred(ctx context.Context, t netease.Track, level string, preferFallback bool, excluded []string) (*netease.Stream, stream, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -1091,7 +1242,7 @@ func (p *Player) openContext(ctx context.Context, t netease.Track, level string)
 		// song alone; it is never treated as a missing playback right.
 		p.Cache.remove(path)
 	}
-	info, err := songURL(ctx, t.ID, level)
+	info, err := p.streamInfoPreferred(ctx, t, level, preferFallback, excluded)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1115,9 +1266,33 @@ func (p *Player) openContext(ctx context.Context, t netease.Track, level string)
 		}
 		dl.mu.Unlock()
 		dl.Close()
+		if info != nil && info.Source != "" {
+			var status *streamHTTPError
+			if errors.As(err, &status) && status.code == http.StatusForbidden {
+				return nil, nil, &sourceHTTPError{source: info.Source, err: err}
+			}
+		}
 		return nil, nil, err
 	}
 	return info, s, nil
+}
+
+func (p *Player) streamInfo(ctx context.Context, t netease.Track, level string) (*netease.Stream, error) {
+	preferFallback := p.PreferFallback != nil && p.PreferFallback(t)
+	return p.streamInfoPreferred(ctx, t, level, preferFallback, nil)
+}
+
+func (p *Player) streamInfoPreferred(ctx context.Context, t netease.Track, level string, preferFallback bool, excluded []string) (*netease.Stream, error) {
+	if preferFallback && p.Fallback != nil {
+		return p.Fallback(ctx, t, level, excluded)
+	}
+	stream, err := songURL(ctx, t.ID, level)
+	if err == nil || !errors.Is(err, netease.ErrNoCopyright) || p.Fallback == nil {
+		return stream, err
+	}
+	// NetEase knows the song but has no rights to serve it. Let the installed
+	// source plugins search other platforms before reporting it unavailable.
+	return p.Fallback(ctx, t, level, excluded)
 }
 
 // Session is where playback was left, to pick up again.
@@ -1170,10 +1345,12 @@ func (p *Player) Restore(s Session) {
 // finish keeps a broken stream from looking like a song played to its end.
 func (p *Player) finish(s *checkedStream) {
 	err := s.Err()
-	if err == nil && p.out.Duration()-p.out.Position() > 2*time.Second && !(p.cloudSong() && s.whole()) {
-		// Short of its length: cut off. But a cloud drive's song that all
-		// came in is as long as its file, which is often shorter than the
-		// song NetEase matched it to, whose length its details give.
+	gap := p.out.Duration() - p.out.Position()
+	// A complete download whose real audio is slightly shorter than NetEase's
+	// metadata duration (common on edits/remasters and cloud drive files)
+	// finished naturally; a truly cut-off or zero-byte stream still retries.
+	wholeComplete := s.whole() && (p.cloudSong() || (s.hasBytes() && p.out.Position() > 0 && gap <= 15*time.Second))
+	if err == nil && gap > 2*time.Second && !wholeComplete {
 		err = errors.New("歌曲音频不完整，请重新加载")
 	}
 	if err != nil {

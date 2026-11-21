@@ -68,10 +68,10 @@ func TestThumbHearts(t *testing.T) {
 // The window is titled with the song and its artists, as NetEase's is, and
 // ends with the app's name, which apps listing windows take for its name.
 func TestSongTitle(t *testing.T) {
-	if got := songTitle("痴人说梦", "HOYO-MiX", "Cloudy"); got != "痴人说梦 - HOYO-MiX - Cloudy" {
+	if got := songTitle("痴人说梦", "HOYO-MiX", "Cloudy-NEXT"); got != "痴人说梦 - HOYO-MiX - Cloudy-NEXT" {
 		t.Errorf("title %q", got)
 	}
-	if got := songTitle("一", "", "Cloudy"); got != "一 - Cloudy" {
+	if got := songTitle("一", "", "Cloudy-NEXT"); got != "一 - Cloudy-NEXT" {
 		t.Errorf("title without artists %q", got)
 	}
 	if got := songTitle("一", "某人", ""); got != "一 - 某人" {

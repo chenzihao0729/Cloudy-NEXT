@@ -292,7 +292,7 @@ func (a *app) cookieLogin(c *ui.Context, panel ui.Element) {
 	if l.cookieErr != "" {
 		ui.Text(c, l.cookieErr).FontSize(12).TextColor(dangerColor).LineHeight(1.4).Margin(4, 0, 0, 0)
 	}
-	ui.Text(c, "Cookie 等同于账号密码，不要发给任何人。Cloudy 只把它存在本机的系统凭据里").
+	ui.Text(c, "Cookie 等同于账号密码，不要发给任何人。Cloudy-NEXT 只把它存在本机的系统凭据里").
 		FontSize(11.5).TextColor(p.faint).LineHeight(1.45).Margin(8, 0, 0, 0)
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Margin(16, 0, 0, 0).Children(func() {
 		if textLink(c.Key("to-qr"), "返回扫码登录", p.muted).Clicked() {

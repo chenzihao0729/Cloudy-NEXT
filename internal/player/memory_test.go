@@ -52,6 +52,28 @@ func TestUncachedDownloadUsesTemporaryFile(t *testing.T) {
 	}
 }
 
+// Alternate audio requests carry the provider's Referer, required by some CDNs.
+func TestDownloadUsesSourceReferer(t *testing.T) {
+	want := "https://y.qq.com/"
+	body := []byte("audio")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Referer"); got != want {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+	d := NewCache(t.TempDir(), 0).download(7, &netease.Stream{
+		URL: srv.URL, Size: int64(len(body)), Level: "exhigh", Type: "mp3", Referer: want,
+	})
+	defer d.Close()
+	got, err := io.ReadAll(&downloadReader{d: d})
+	if err != nil || !bytes.Equal(got, body) {
+		t.Fatalf("download with provider Referer: %v, body %q", err, got)
+	}
+}
+
 // A failed spool must not let a long download grow beyond its memory budget.
 func TestDownloadMemoryBound(t *testing.T) {
 	d := downloaded(nil)

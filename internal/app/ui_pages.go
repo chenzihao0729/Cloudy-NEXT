@@ -450,6 +450,7 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 			return
 		}
 		tr := &tracks[i]
+		canPlay := a.canPlayTrack(*tr)
 		playing := cur != nil && cur.ID == tr.ID
 		selected := batch && a.batch.selected[tr.ID]
 		row := ui.ButtonBase(c.Key(tr.ID)).Height(54).PaddingX(12).Gap(14).Radius(14).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
@@ -482,7 +483,7 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 			shift += 10 * (1 - shown)
 		}
 		row.Translate(0, shift)
-		if !tr.Playable() {
+		if !canPlay {
 			shown *= 0.42
 		}
 		if shown < 1 {
@@ -497,7 +498,7 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 				switch {
 				case playing:
 					a.nowPlayingBars(c)
-				case hovered && tr.Playable():
+				case hovered && canPlay:
 					ui.Icon(c, iconPlay).Size(13, 13).TextColor(p.text)
 				default:
 					ui.Textf(c, "%d", i+1).FontSize(13).FontFeatures("tnum").TextColor(p.faint)
@@ -521,7 +522,7 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 				}
 				ui.RichText(c, spans...).FontSize(14).SingleLine()
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					if !tr.Playable() {
+					if tr.RequiresVIP() {
 						ui.Text(c, "VIP").FontSize(9).FontWeight(800).TextColor(p.accent).Padding(0, 4).Radius(3).Border(1, p.accent.Alpha(0.6))
 					}
 					if batch {
@@ -561,11 +562,11 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 			}
 			ui.Text(c, clock(tr.Length())).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(44).TextAlign(ui.End)
 		})
-		if row.Clicked() {
+		if row.DoubleClicked() {
 			switch {
 			case batch:
 				a.toggleBatch(tr.ID)
-			case tr.Playable():
+			case canPlay:
 				a.pl.PlayQueue(tracks, i)
 			}
 		}

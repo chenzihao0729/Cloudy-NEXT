@@ -11,22 +11,17 @@ import (
 	"netease-music-mygo/internal/player"
 )
 
-// cacheFolderName is the folder the songs are kept in, inside one the
-// listener chose: the cache drops what it keeps by itself, every MP3 and
-// FLAC in its folder, which must never be one of the listener's own.
-const cacheFolderName = "Cloudy 歌曲缓存"
+// cacheFolderName is the folder used when the listener chooses a parent
+// directory for the cache. The default is beside the installed application.
+const cacheFolderName = "Cache"
 
 // songCacheDir is where the songs played are kept: in the folder the
-// listener chose, or else in the app's cache directory, "" without one.
+// listener chose, or else in Cache beside the installed application.
 func songCacheDir(folder string) string {
 	if folder != "" {
 		return filepath.Join(folder, cacheFolderName)
 	}
-	dir, err := mygo.App.Path(mygo.PathCache)
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "songs")
+	return filepath.Join(defaultAppFolder(), cacheFolderName)
 }
 
 // newSongCache returns the cache of songs played, in songCacheDir, or nil

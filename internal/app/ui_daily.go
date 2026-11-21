@@ -397,7 +397,7 @@ func (a *app) dailyPlayButton(c *ui.Context, songs []netease.Track, ours, playin
 		if ours {
 			a.pl.TogglePlay()
 		} else {
-			a.pl.PlayQueue(songs, firstPlayable(songs))
+			a.pl.PlayQueue(songs, a.firstPlayable(songs))
 		}
 	}
 }
@@ -428,7 +428,7 @@ func (a *app) dailyPicks(c *ui.Context, songs []netease.Track, ours bool) {
 					a.artistLinks(c, tr, white.Alpha(0.6), white).FontSize(11.5).MaxLines(1)
 				})
 			})
-			if row.Clicked() {
+			if row.DoubleClicked() {
 				if current {
 					a.pl.TogglePlay()
 				} else {
@@ -568,6 +568,9 @@ func (a *app) dailyPage(c *ui.Context) {
 					}
 					if pillButton(c.Key("shuffle"), iconShuffle, "随机播放", p.hover.Over(p.bg), p.text).Clicked() {
 						a.playList(songs, true)
+					}
+					if pillButton(c.Key("history"), iconHistory, "历史日推", p.hover.Over(p.bg), p.text).Clicked() {
+						a.open(route{page: pageHistoryDaily})
 					}
 					a.batchEntry(c)
 				})

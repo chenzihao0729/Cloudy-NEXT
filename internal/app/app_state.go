@@ -76,14 +76,16 @@ type settingsView struct {
 	scroll [settingsCategoryCount]ui.ScrollState
 	// query is what is searched in the settings, searchBox its field, and
 	// searchScroll how far what it found is scrolled.
-	query        string
-	searchBox    ui.Handle
-	searchScroll ui.ScrollState
-	dirty        bool                   // a slider moved, and the settings are not kept yet
-	accentDraft  accentPick             // the color well open, and the color it shows
-	fontPick     fontPicker             // the dialog of the system's fonts
-	confirmGlass bool                   // asking before enabling global liquid glass
-	materialOpen bool                   // the parts of the material show, to set each
-	thumbs       map[string]*sceneThumb // the backdrops' pictures on their cards
-	preview      npPreview              // Now Playing in small, at the head of its page
+	query           string
+	searchBox       ui.Handle
+	searchScroll    ui.ScrollState
+	dirty           bool       // a slider moved, and the settings are not kept yet
+	accentDraft     accentPick // the color well open, and the color it shows
+	fontPick        fontPicker // the dialog of the system's fonts
+	confirmGlass    bool       // asking before enabling global liquid glass
+	materialOpen    bool       // the parts of the material show, to set each
+	sourceLogs      bool
+	sourceLogScroll ui.ScrollState
+	thumbs          map[string]*sceneThumb // the backdrops' pictures on their cards
+	preview         npPreview              // Now Playing in small, at the head of its page
 }

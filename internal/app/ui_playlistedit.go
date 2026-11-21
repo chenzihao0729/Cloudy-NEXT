@@ -251,12 +251,14 @@ func (a *app) deleteChosen() {
 	a.mine = slices.Delete(slices.Clone(a.mine), i, i+1)
 	// Leave no way back to its page, and leave it for the page before.
 	gone := func(r route) bool { return r.page == pagePlaylist && r.id == id }
-	a.history = slices.DeleteFunc(a.history, gone)
-	a.forward = slices.DeleteFunc(a.forward, gone)
+	a.history, a.historyScroll = removeHistoryRoutes(a.history, a.historyScroll, gone)
+	a.forward, a.forwardScroll = removeHistoryRoutes(a.forward, a.forwardScroll, gone)
 	if gone(a.route) {
 		r := route{page: pageHome}
 		if n := len(a.history); n > 0 {
 			r, a.history = a.history[n-1], a.history[:n-1]
+			a.restoreY = a.historyScroll[n-1]
+			a.historyScroll = a.historyScroll[:n-1]
 		}
 		a.show(r)
 	}
@@ -272,6 +274,21 @@ func (a *app) deleteChosen() {
 			a.toast = "已删除歌单"
 		})
 	}()
+}
+
+func removeHistoryRoutes(routes []route, positions []float32, gone func(route) bool) ([]route, []float32) {
+	keptRoutes := make([]route, 0, len(routes))
+	keptPositions := make([]float32, 0, len(positions))
+	for i, r := range routes {
+		if gone(r) {
+			continue
+		}
+		keptRoutes = append(keptRoutes, r)
+		if i < len(positions) {
+			keptPositions = append(keptPositions, positions[i])
+		}
+	}
+	return keptRoutes, keptPositions
 }
 
 func (a *app) setPlaylistName(id int64, name string) {

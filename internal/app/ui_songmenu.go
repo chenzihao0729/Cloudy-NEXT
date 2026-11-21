@@ -140,7 +140,7 @@ func (a *app) songMenu(c *ui.Context, tr *netease.Track, size float32, color ui.
 // songMenuLabeled is songMenu with the name its button is known by: the
 // player bar calls it details.
 func (a *app) songMenuLabeled(c *ui.Context, tr *netease.Track, size float32, color ui.Color, label string, extra ...[]menuAction) ui.Element {
-	b := iconButton(c, iconMore, size, color, label)
+	b := iconButton(c, iconMore, size, color, label).Tooltip(label)
 	if b.Clicked() {
 		// The details of what plays, which the sound effects shape too.
 		fx := menuAction{label: "音效", icon: iconWave, note: a.effectsNote(), do: a.openEffects}

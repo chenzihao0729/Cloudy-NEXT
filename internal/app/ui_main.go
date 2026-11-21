@@ -134,6 +134,7 @@ func (a *app) view(c *ui.Context) {
 	a.whatsNewDialog(c)
 	a.shortcutEditorDialog(c)
 	a.fontPickerDialog(c)
+	a.sourceLogsDialog(c)
 	a.effectsDialog(c)
 	a.lyricDownloadDialog(c)
 	a.menuOverlay(c)
@@ -281,7 +282,9 @@ func (a *app) open(r route) {
 	if r == a.route {
 		return
 	}
-	a.history, a.forward = append(a.history, a.route), nil
+	a.history = append(a.history, a.route)
+	a.historyScroll = append(a.historyScroll, a.pageScroll.Y)
+	a.forward, a.forwardScroll = nil, nil
 	a.show(r)
 }
 
@@ -340,6 +343,8 @@ func (a *app) load(r route) {
 		if len(a.week.songs) == 0 {
 			a.loadWeek()
 		}
+	case pageHistoryDaily:
+		a.loadHistoryDays()
 	case pageCloud:
 		a.loadCloud(false)
 	case pageLocal:
@@ -366,8 +371,11 @@ func (a *app) back() {
 		return
 	}
 	a.forward = append(a.forward, a.route)
+	a.forwardScroll = append(a.forwardScroll, a.pageScroll.Y)
 	r := a.history[len(a.history)-1]
 	a.history = a.history[:len(a.history)-1]
+	a.restoreY = a.historyScroll[len(a.historyScroll)-1]
+	a.historyScroll = a.historyScroll[:len(a.historyScroll)-1]
 	a.flyBack(r)
 	a.show(r)
 	a.pageDir = -1
@@ -380,8 +388,11 @@ func (a *app) goForward() {
 		return
 	}
 	a.history = append(a.history, a.route)
+	a.historyScroll = append(a.historyScroll, a.pageScroll.Y)
 	r := a.forward[len(a.forward)-1]
 	a.forward = a.forward[:len(a.forward)-1]
+	a.restoreY = a.forwardScroll[len(a.forwardScroll)-1]
+	a.forwardScroll = a.forwardScroll[:len(a.forwardScroll)-1]
 	a.nowPlaying = false
 	a.show(r)
 	a.pageDir = 1
@@ -672,6 +683,8 @@ func (a *app) content(c *ui.Context, foreground float32) {
 			a.stylePage(c)
 		case pageWeek:
 			a.weekPage(c)
+		case pageHistoryDaily:
+			a.historyPage(c)
 		}
 	})
 }
@@ -754,7 +767,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 	}
 	if pl := a.playlists[id]; pl != nil {
 		if thenPlay {
-			a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+			a.pl.PlayQueue(pl.Tracks, a.firstPlayable(pl.Tracks))
 		}
 		if thenPlay || time.Since(a.playlistAt[id]) < personalRefreshGap {
 			return
@@ -790,9 +803,9 @@ func (a *app) say(what, msg string) {
 	a.toast, a.toastAs = msg, "state:"+what
 }
 
-func firstPlayable(tracks []netease.Track) int {
+func (a *app) firstPlayable(tracks []netease.Track) int {
 	for i := range tracks {
-		if tracks[i].Playable() {
+		if a.canPlayTrack(tracks[i]) {
 			return i
 		}
 	}
@@ -815,6 +828,6 @@ func (a *app) playlistAnswered(gen int, id int64, pl *netease.Playlist, err erro
 	}
 	a.playlistAt[id] = time.Now()
 	if thenPlay {
-		a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+		a.pl.PlayQueue(pl.Tracks, a.firstPlayable(pl.Tracks))
 	}
 }

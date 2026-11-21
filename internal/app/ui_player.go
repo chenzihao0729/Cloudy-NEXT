@@ -664,7 +664,7 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 				desk = p.accent
 			}
 			if !compact {
-				deskBtn := iconButton(c.Key("desk-lyrics"), iconSubtitles, toolIcon, desk, "桌面歌词")
+				deskBtn := iconButton(c.Key("desk-lyrics"), iconSubtitles, toolIcon, desk, "桌面歌词").Tooltip("桌面歌词")
 				a.deskBtn = deskBtn.LayoutBounds()
 				if deskBtn.Clicked() {
 					a.toggleDeskLyrics()
@@ -676,11 +676,11 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 			if a.settings.LyricTrans {
 				trans = p.accent
 			}
-			if iconButton(c.Key("lyric-trans"), iconTranslate, toolIcon, trans, "歌词翻译").Clicked() {
+			if iconButton(c.Key("lyric-trans"), iconTranslate, toolIcon, trans, "歌词翻译").Tooltip("歌词翻译").Clicked() {
 				a.toggleLyricTrans()
 			}
 			if !compact && tr != nil && tr.ProgramID == 0 && tr.ID > 0 {
-				add := iconButton(c.Key("add-to-playlist"), iconListPlus, toolIcon, muted, "添加到歌单")
+				add := iconButton(c.Key("add-to-playlist"), iconListPlus, toolIcon, muted, "添加到歌单").Tooltip("添加到歌单")
 				if add.Clicked() {
 					a.addToPlaylistMenu(add, tr)
 				}

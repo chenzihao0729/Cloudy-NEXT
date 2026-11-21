@@ -314,7 +314,9 @@ func (a *app) miniCover(c *ui.Context, tr *netease.Track, size float32, square b
 	box.Children(func() {
 		switch {
 		case tr == nil:
-			ui.Box(c).Size(size, size).Radius(999).Center().Background(white.Alpha(0.08)).Children(func() { mascotView(c, size*0.72) })
+			ui.Box(c).Size(size, size).Radius(999).Center().Background(white.Alpha(0.08)).Children(func() {
+				ui.Image(c, brandIcon()).Size(size*0.72, size*0.72).Fit(ui.Cover)
+			})
 		case square:
 			ui.Box(c).Size(size, size).Radius(14).Shadow(0, 8, 24, -6, ui.RGBA(0, 0, 0, 0.45)).Children(func() {
 				a.coverFill(c, tr.Album.PicURL, miniArtPx(size, size), 14)
@@ -612,22 +614,21 @@ func miniArtPx(w, h float32) int {
 	return 800
 }
 
-// applyMiniLayer keeps the mini window over the other windows, or, kept on
-// the desktop, under them.
+// applyMiniLayer keeps a pinned mini window above every other window.
 func (a *app) applyMiniLayer() {
 	if a.miniWin == nil {
 		return
 	}
-	a.miniWin.SetAlwaysOnTop(!a.settings.MiniDesk)
+	a.miniWin.SetAlwaysOnTop(a.settings.MiniDesk)
 	a.sinkMini()
 }
 
-// sinkMini puts the mini window back under the others, when it is kept on
-// the desktop.
+// sinkMini is kept as a focus callback for compatibility. A pinned mini
+// window must remain topmost after focus changes.
 func (a *app) sinkMini() {
-	if a.miniWin != nil && a.settings.MiniDesk && a.more.miniResize.key == "" {
-		sinkWindow(a.miniWin.NativeHandle())
-	}
+	// A non-topmost window naturally falls behind the active application.
+	// Forcing HWND_BOTTOM makes Windows place it behind the desktop itself,
+	// which looks like the mini window disappeared after pinning it.
 }
 
 // miniPin keeps the mini window on the desktop, or over the others again.
@@ -637,7 +638,7 @@ func (a *app) miniPin(c *ui.Context, over bool) {
 		ink = white.Alpha(0.85)
 	}
 	if a.settings.MiniDesk {
-		ink, tip = ui.Hex("#7cc4ff"), "取消固定，回到最上层"
+		ink, tip = ui.Hex("#7cc4ff"), "取消固定"
 	}
 	// Tilted, as a pushpin is pressed in: along the arrows beside it.
 	pin := roundButton(c.Key("pin"), 14, ink, tip).Size(26, 26).Shrink(0).Tooltip(tip)

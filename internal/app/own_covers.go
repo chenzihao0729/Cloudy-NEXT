@@ -169,7 +169,7 @@ func (a *app) pickOwnCover(key, songPath string) {
 				a.toast = "无法保存封面：" + err.Error()
 				return
 			}
-			a.toast = "已更换封面（只在 Cloudy 里显示）"
+			a.toast = "已更换封面（只在 Cloudy-NEXT 里显示）"
 		})
 	}()
 }

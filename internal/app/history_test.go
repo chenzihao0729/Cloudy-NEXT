@@ -16,18 +16,27 @@ func TestBackAndForward(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	charts, list := route{page: pageCharts}, route{page: pagePlaylist, id: 42}
 	a.open(charts)
+	tt.Frame()
+	a.pageScroll.Y = 140
 	a.open(list)
 	tt.Frame()
+	a.pageScroll.Y = 300
 
 	tt.Key(0, ui.KeyBack)
 	tt.Frame()
 	if a.route != charts {
 		t.Fatalf("back went to %+v", a.route)
 	}
+	if a.pageScroll.Y != 140 {
+		t.Fatalf("back restored scroll %v, want 140", a.pageScroll.Y)
+	}
 	tt.Key(0, ui.KeyForward)
 	tt.Frame()
 	if a.route != list {
 		t.Fatalf("forward went to %+v", a.route)
+	}
+	if a.pageScroll.Y != 300 {
+		t.Fatalf("forward restored scroll %v, want 300", a.pageScroll.Y)
 	}
 
 	// Back closes Now Playing before it leaves the page under it.

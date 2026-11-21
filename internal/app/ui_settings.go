@@ -104,14 +104,16 @@ func (a *app) settingsPanel(c *ui.Context) {
 		panel.Width(min(940, w-48)).Height(max(h-72, 320)).TextColor(ink.text).Label("设置").TransformOrigin(0, 1)
 		a.pane(panel, 26, false)
 		panel.Children(func() {
-			ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-				a.settingsSidebar(c)
-				a.settingsBody(c)
-			})
-			ui.Box(c).Absolute().Top(16).Right(16).Children(func() {
-				if iconButton(c.Key("close"), iconX, 14, ink.muted, "关闭").Background(ink.hover).Clicked() {
-					a.settingsView.open = false
-				}
+			a.scalingBody(c, func() {
+				ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+					a.settingsSidebar(c)
+					a.settingsBody(c)
+				})
+				ui.Box(c).Absolute().Top(16).Right(16).Children(func() {
+					if iconButton(c.Key("close"), iconX, 14, ink.muted, "关闭").Background(ink.hover).Clicked() {
+						a.settingsView.open = false
+					}
+				})
 			})
 		})
 	})
@@ -677,6 +679,26 @@ func (a *app) settingsAccountPage(k *settingsKit) {
 
 func (a *app) settingsPlaybackPage(k *settingsKit) {
 	c, s := k.c, &a.settings
+	k.group("播放源", func() {
+		k.stateRow("音源插件", a.sourcePluginLabel(), func() {
+			if k.button("source-plugin-test", "测试解析", iconPlay, a.source == nil || !a.source.hasPlugin(), false).Clicked() {
+				a.testSourcePlugin()
+			}
+			if k.button("source-plugin-import", "添加插件", iconPlus, false, false).Clicked() {
+				a.importSourcePlugin()
+			}
+			if k.button("source-plugin-logs", "运行日志", iconHistory, false, false).Clicked() {
+				a.settingsView.sourceLogs = true
+			}
+		})
+		k.row("启用播放源", "未登录或账号无会员时用插件播放 VIP 歌曲；有会员时使用网易云", func() {
+			k.toggle("qq-fallback", "启用播放源", &s.QQFallback, a.source == nil || !a.source.hasPlugin(), func() {
+				if a.source != nil {
+					a.source.setEnabled(s.QQFallback)
+				}
+			})
+		})
+	})
 	k.group("音质", func() {
 		k.rowOf(settingRow{label: "播放音质", desc: "无损与 Hi-Res 需要黑胶 VIP，下一首开始生效",
 			tip: "没有黑胶 VIP 时，播放所能播放的最高音质"}, func() {
@@ -898,12 +920,12 @@ func (a *app) settingsStoragePage(k *settingsKit) {
 			}
 		})
 		if canRegisterOpenWith {
-			k.row("用 Cloudy 打开音乐文件", "加入 MP3、FLAC 的「打开方式」；要设为默认播放器，请在系统的默认应用设置里选择 Cloudy", func() {
+			k.row("用 Cloudy-NEXT 打开音乐文件", "加入 MP3、FLAC 的「打开方式」；要设为默认播放器，请在系统的默认应用设置里选择 Cloudy-NEXT", func() {
 				if k.button("open-with", "添加到打开方式", nil, false, false).Clicked() {
 					if err := registerOpenWith(); err != nil {
 						a.toast = "添加失败：" + err.Error()
 					} else {
-						a.toast = "已添加：在音乐文件上右键「打开方式」就能选择 Cloudy"
+						a.toast = "已添加：在音乐文件上右键「打开方式」就能选择 Cloudy-NEXT"
 					}
 				}
 				if k.button("default-apps", "默认应用设置", iconExternal, false, false).Clicked() {
@@ -980,7 +1002,7 @@ func (a *app) settingsSystemPage(k *settingsKit) {
 	})
 	k.group("启动", func() {
 		login := a.openAtLogin()
-		k.row("开机时启动", "登录 Windows 后自动打开 Cloudy", func() {
+		k.row("开机时启动", "登录 Windows 后自动打开 Cloudy-NEXT", func() {
 			on := login
 			if settingSwitch(k.c.Key("open-at-login"), &on).Label("开机时启动").Changed() {
 				a.setOpenAtLogin(on)
@@ -991,7 +1013,7 @@ func (a *app) settingsSystemPage(k *settingsKit) {
 		})
 	})
 	k.group("关闭窗口", func() {
-		choices := []string{"最小化到托盘", "退出 Cloudy"}
+		choices := []string{"最小化到托盘", "退出 Cloudy-NEXT"}
 		chosen := choices[0]
 		if s.CloseQuits {
 			chosen = choices[1]
@@ -1015,13 +1037,19 @@ func (a *app) settingsSystemPage(k *settingsKit) {
 				a.showMini()
 			}
 		})
+		k.row("重置窗口位置", "桌面歌词和迷你窗口回到主屏幕的默认位置，找不到它们时用", func() {
+			if k.button("reset-spots", "重置", nil, false, false).Clicked() {
+				a.resetFloatSpots()
+				a.say("reset-spots", "桌面歌词和迷你窗口已回到默认位置")
+			}
+		})
 	})
 }
 
 func (a *app) settingsAboutPage(k *settingsKit) {
 	s := &a.settings
 	k.group("软件信息", func() {
-		k.block("软件信息 版本 源码 原项目 开源 "+mygo.App.Version(), func() { a.aboutCard(k) })
+		k.block("软件信息 版本 项目 开源 "+mygo.App.Version(), func() { a.aboutCard(k) })
 	})
 	if a.updates {
 		k.group("更新", func() {
@@ -1032,21 +1060,18 @@ func (a *app) settingsAboutPage(k *settingsKit) {
 			k.stateRow("提醒新版本", desc, func() {
 				k.toggle("update-checks", "提醒新版本", &s.UpdateChecks, false, nil)
 			})
-			// Installing in the background goes with the checks,
-			// which find what it installs.
-			k.sub("自动安装更新", "后台发现新版本时直接装好，下次打开软件时生效；手动检查仍会先问你", s.UpdateChecks, func() {
+			// Keep this option visible and independently configurable when
+			// update reminders are off; it takes effect when checks are on.
+			k.row("自动安装更新", "后台发现新版本时直接装好，下次打开软件时生效；手动检查仍会先问你", func() {
 				k.toggle("update-downloads", "自动安装更新", &s.UpdateInstall, false, nil)
 			})
-			k.stateRow("当前版本 "+mygo.App.Version(), "新版本来自 GitHub 的 nya-owo/cloudy", func() {
+			k.stateRow("当前版本 "+mygo.App.Version(), "新版本来自 chenzihao0729/Cloudy-NEXT", func() {
 				if k.button("check-updates", "检查更新", nil, false, false).Clicked() {
 					a.checkForUpdates()
 				}
 			})
 		})
 	}
-	k.group("反馈", func() {
-		k.block("反馈 建议 问题 bug 私信 邮件", func() { a.feedbackCard(k.c, k.ink) })
-	})
 }
 
 // settingSlider is a slider of a setting, from 0 to 1, with how far it is
