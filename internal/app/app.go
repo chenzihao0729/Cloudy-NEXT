@@ -133,6 +133,15 @@ type app struct {
 	// Where the page and the sidebar are scrolled, kept while Now Playing
 	// covers them, unbuilt.
 	pageScroll ui.ScrollState
+	// listScroll is where the list of songs is scrolled, which its floating
+	// buttons glide (listFloats); listBox is where it shows, and listLocate
+	// the row it glides to, to be set right where the glide fell short, or
+	// -1.
+	listScroll ui.ScrollState
+	listBox    ui.Rect
+	listLocate int
+	listAim    int // the row a glide is to head for, once it knows where it starts, or 0
+	listWait   int // frames until then
 	navScroll  ui.ScrollState
 	scrolled   route // the page trackList and pageScroll are of
 
@@ -185,6 +194,7 @@ type app struct {
 	effects     effectsView // the pane of the sound effects
 	auto        autoState   // the effects chosen for the song playing
 	mutedFrom   float64
+	volumeSave  *time.Timer // keeps the volume a moment after it last moved
 
 	rowBars barState
 	// underTop and underBottom say whether the page has content under its
@@ -211,6 +221,7 @@ type app struct {
 	morph                 floatMorph       // the player on its way to or from it
 	deskBtn               ui.Rect          // the player bar's button of the desktop lyrics, while it shows
 	deskFly               deskFlight       // the desktop lyrics on their way out of it or back
+	deskLineAt            ui.Rect          // where the desktop lyrics laid out their line last
 	sleep                 sleepState       // the timer that pauses the music
 	keys                  shortcutState    // the global keys and the menu keys
 	spin                  discState        // how far the bar's cover has turned
@@ -251,9 +262,11 @@ type app struct {
 
 	// The songs saved to disk, the ones on their way there, and where both
 	// are kept.
-	dl     downloadState
-	lib    localLibrary
-	opened *openedFiles // the songs opened with Cloudy, coming in
+	dl  downloadState
+	lib localLibrary
+	// The covers the listener chose for their playlists and songs.
+	ownCovers ownCovers
+	opened    *openedFiles // the songs opened with Cloudy, coming in
 
 	restored     bool   // playback picked up where it was left
 	savedSession string // the session as last kept
@@ -375,6 +388,7 @@ func Run() error {
 		a.pl.SetEffects(a.currentEffects(), false)
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.useMoreWords()
+		a.useOwnCovers()
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
 		a.pl.Crossfade = a.crossfade
 		a.pl.Cache = newSongCache(a.settings.CacheFolder, a.settings.CacheMB)
@@ -395,6 +409,8 @@ func Run() error {
 			a.autoFollow()
 			a.syncCaptions()
 			a.syncThumbs()
+			// 暂停后的桌面歌词已停止定时刷新，恢复播放时需唤醒其他窗口。
+			a.redraw()
 		}
 		a.volume = a.settings.Volume
 		a.pl.SetVolume(a.volume)
@@ -472,13 +488,25 @@ func Run() error {
 		})
 	})
 	a.followProgress()
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
-		a.quitting = true
+	keep := func() {
 		a.settings.Volume = a.volume
 		a.settings.save()
 		a.saveSession()
 		if write := a.transcriptWrite(); write != nil {
 			write()
+		}
+	}
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		a.quitting = true
+		keep()
+	})
+	// Windows ending the session (shutting down, signing out) ends the app
+	// without a quit: what was kept would be lost, the volume back at 80%
+	// at every start (a viewer, 1.3.2).
+	mygo.App.OnQuit(func() {
+		if !a.quitting {
+			a.quitting = true
+			keep()
 		}
 	})
 	// Windows leaves an icon in the notification area after its app until

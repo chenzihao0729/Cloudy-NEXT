@@ -164,9 +164,10 @@ func TestAlbumGroups(t *testing.T) {
 	}
 }
 
-// An album chosen in the album index is all the list shows; 全部专辑 shows
+// An album chosen in the album index opens, all the list shows; 全部专辑 shows
 // them all again.
 func TestAlbumChosenInIndex(t *testing.T) {
+	var c0 = timeZero
 	a := newTestApp()
 	a.route = route{page: pageDownloads}
 	song := func(name, album string) netease.Track {
@@ -180,11 +181,13 @@ func TestAlbumChosenInIndex(t *testing.T) {
 		t.Fatalf("%d songs, %d albums", len(got), len(v.all))
 	}
 	a.chooseAlbum(v, v.all[0].key)
+	a.albumMoved(c0) // as the next frame does
 	got := a.listShown(tracks)
 	if len(got) != 2 || got[0].Album.Name != "X" || len(v.groups) != 1 || v.groups[0].start != 0 || len(v.all) != 2 {
 		t.Fatalf("kept to X: %d songs, groups %+v", len(got), v.groups)
 	}
 	a.chooseAlbum(v, "")
+	a.albumMoved(c0)
 	if got := a.listShown(tracks); len(got) != 3 {
 		t.Fatalf("all again: %d", len(got))
 	}

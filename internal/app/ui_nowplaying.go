@@ -252,7 +252,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		coverA := big(h-bar-npRowFoot-2*(npTabsHeight+npTabsGap), under)
 		coverC := coverA
 		if a.settings.NpCalm {
-			coverC = max(coverA, big(h-bar, under-cs.foldedTotal()))
+			coverC = max(coverA, big(h-bar-npCalmFoot, under-cs.foldedTotal()))
 		}
 		// With some slack, for a window resized about the threshold not to
 		// go between the two at every step.
@@ -290,7 +290,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		// Calming, the controls first fade (npCalmFade), then the column
 		// closes up and the cover grows, on one curve (npCalmLay).
 		// Calm, the room under the column for the lyrics' tools is gone.
-		foot := npRowFoot * (1 - lay)
+		foot := lerp(npRowFoot, npCalmFoot, lay)
 		padX := npSideX(w)
 		a.more.npPaneW = w - 2*padX - side - npGapX(w)
 		tabs := npTabsRow(c, w)
@@ -323,6 +323,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				}
 				actions := func(size float32) {
 					a.likeCountButton(c.Key("like"), tr, size, white.Alpha(0.7))
+					a.dislikeButton(c, tr, size, white.Alpha(0.7))
 					a.commentCountButton(c.Key("comment-count"), tr, size, white.Alpha(0.7))
 				}
 				switch {
@@ -526,8 +527,12 @@ const npLyricEdge = 72
 const npTabsHeight = 28
 
 const (
-	npTabsGap    = 16  // between the tabs and the cover under them, at least
-	npRowFoot    = 44  // under the cover's column, for the lyrics' tools
+	npTabsGap = 16 // between the tabs and the cover under them, at least
+	npRowFoot = 44 // under the cover's column, for the lyrics' tools
+	// npCalmFoot is kept under the column calm: with none, a wide window
+	// at its least height grew the cover until the progress touched its
+	// foot, half out of sight (the user, 1.3.3-test.1).
+	npCalmFoot   = 28
 	npRestGuess  = 270 // what goes under the cover, before it is laid out
 	npCoverLeast = 96  // the cover's least size, in the shortest window
 	npSideLeast  = 280 // how narrow the cover's column goes
@@ -702,6 +707,7 @@ func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 					a.artistLinks(c, tr, white.Alpha(0.55), white).FontSize(12).SingleLine()
 				})
 				a.likeCountButton(c.Key("like"), tr, 17, white.Alpha(0.6))
+				a.dislikeButton(c, tr, 17, white.Alpha(0.6))
 				a.commentCountButton(c.Key("comment-count"), tr, 17, white.Alpha(0.6))
 				a.songMenu(c.Key("more"), tr, 17, white.Alpha(0.6)).Margin(0, 0, 0, -10)
 			})
@@ -913,14 +919,22 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 					}
 					text.Children(func() {
 						ui.Box(c.Key("sung")).Children(func() {
-							if on && len(l.Words) > 0 {
+							if len(l.Words) > 0 {
 								// The line sung lights up word by word as it is sung.
+								// Every line of words is built the same, lit or not:
+								// the line coming in turned from one text into
+								// a run per word, laid out anew, and the
+								// lyrics hitched as they moved on (a viewer, 1.3.1).
 								ui.RichText(c.Key("words")).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).Children(func() {
 									for wi, wd := range l.Words {
-										ui.Text(c.Key(wi), wd.Text).TextColor(white.Alpha(0.38 + 0.62*wordLit(wd, pos)))
+										lit := float32(1)
+										if on {
+											lit = 0.38 + 0.62*wordLit(wd, pos)
+										}
+										ui.Text(c.Key(wi), wd.Text).TextColor(white.Alpha(lit))
 									}
 								})
-								if pl.Playing() {
+								if on && pl.Playing() {
 									// Words brighten smoothly enough at 25 frames a second.
 									c.After(40 * time.Millisecond)
 								}

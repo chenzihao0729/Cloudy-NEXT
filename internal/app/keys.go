@@ -52,7 +52,11 @@ func (a *app) applyGlobalKeys() {
 	}
 	for _, k := range shortcutActions {
 		keys := k.keys
-		if custom := strings.TrimSpace(a.settings.Shortcuts[k.id]); custom != "" {
+		custom := strings.TrimSpace(a.settings.Shortcuts[k.id])
+		if custom == shortcutOff {
+			continue // turned off by the listener: no key, none taken
+		}
+		if custom != "" {
 			keys = []string{custom}
 		}
 		do, taken := k.do, true
@@ -115,6 +119,7 @@ func (a *app) toggleWindow() {
 func (a *app) nudgeVolume(by float64) {
 	a.volume = math.Max(0, math.Min(a.volume+by, 1))
 	a.pl.SetVolume(a.volume)
+	a.keepVolume()
 }
 
 // sleepChoices are how long music can play on for.

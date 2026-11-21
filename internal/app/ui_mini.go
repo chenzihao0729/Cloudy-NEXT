@@ -288,15 +288,29 @@ func miniRadius(l miniLayout, h float32) float32 {
 	return 26
 }
 
+// restoreFromMini is what a click on the mini window's cover does; tests
+// count it. Set in init: closeMini leads back to miniCover.
+var restoreFromMini func(*app)
+
+func init() { restoreFromMini = (*app).closeMini }
+
 // miniCover is the cover at size: the disc, turning, while small; else the
-// cover, square.
+// cover, square. Hovered, it dims under the expand mark, and a click on it
+// goes back to the main window. As a button it is no handle of the window,
+// as the rest of it is: it does not move the window.
 func (a *app) miniCover(c *ui.Context, tr *netease.Track, size float32, square bool) {
-	box := ui.Box(c.Key("mini-cover")).Size(size, size).Shrink(0)
+	box := ui.ButtonBase(c.Key("mini-cover")).Size(size, size).Shrink(0).FocusRing(false).
+		Cursor(ui.CursorPointer).Label("迷你窗口封面")
 	a.more.miniCoverAt = box.LayoutBounds()
-	a.more.miniCoverRound = size / 2
+	radius := size / 2
 	if square && tr != nil {
-		a.more.miniCoverRound = 14
+		radius = 14
 	}
+	a.more.miniCoverRound = radius
+	if box.Clicked() {
+		restoreFromMini(a)
+	}
+	hovered := box.Hovered()
 	box.Children(func() {
 		switch {
 		case tr == nil:
@@ -311,6 +325,13 @@ func (a *app) miniCover(c *ui.Context, tr *netease.Track, size float32, square b
 				frame = discFrame
 			}
 			a.barDisc(c, tr, size, frame)
+		}
+		if hovered {
+			mark := min(24, max(16, size*0.28))
+			ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Radius(radius).Center().PassThrough().
+				Background(ui.RGBA(0, 0, 0, 0.35)).TextColor(white).Children(func() {
+				ui.Icon(c, iconExpand).Size(mark, mark)
+			})
 		}
 	})
 }

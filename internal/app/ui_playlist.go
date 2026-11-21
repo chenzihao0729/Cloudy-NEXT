@@ -35,6 +35,11 @@ type plView struct {
 	// The album index: whether it is open, and what it is searched for.
 	indexOpen  bool
 	indexQuery string
+	// backRow is the row the albums showed at the top as one opened, to go
+	// back to (ui_album_open.go).
+	backRow int
+	// move is an album to open or close as the list builds next.
+	move *albumMove
 }
 
 // albumGroup is an album's songs, together in a list sorted by album: from
@@ -171,7 +176,10 @@ func (a *app) listShown(tracks []netease.Track) []netease.Track {
 	}
 	q := strings.ToLower(strings.TrimSpace(v.query))
 	if len(tracks) == 0 || q == "" && v.sort == 0 {
-		v.groups, v.all = nil, nil
+		// What was sorted before goes with its groups: sorted by album
+		// again, it was found here without them, and the switch and the
+		// album index were gone (the user, 1.3.2-test.4).
+		v.groups, v.all, v.matched = nil, nil, false
 		return tracks
 	}
 	if v.matched && v.of == &tracks[0] && v.n == len(tracks) && v.asked == q && v.sorted == v.sort && v.only == v.album {
@@ -219,16 +227,29 @@ func (a *app) listShown(tracks []netease.Track) []netease.Track {
 
 // toolRows lists tracks as trackRows does, with listTools under the header.
 func (a *app) toolRows(c *ui.Context, tracks []netease.Track, covers bool, header func(c *ui.Context)) {
+	if a.plView.route == a.route {
+		a.albumMoved(c.Now())
+	}
 	shown := a.listShown(tracks)
 	var foot []func(c *ui.Context)
 	if len(shown) == 0 && len(tracks) > 0 {
 		foot = append(foot, func(c *ui.Context) { a.empty(c, "没有匹配的歌曲") })
 	}
+	groups := a.plView.groups
+	g, open := a.albumOpen()
+	if open {
+		// The album's own head says which it is: no title over its songs.
+		groups = nil
+	}
 	withTools := func(c *ui.Context) {
-		header(c)
+		if open {
+			a.albumHead(c, g, shown)
+		} else {
+			header(c)
+		}
 		a.listTools(c, tracks, shown)
 	}
-	a.trackRowsGrouped(c, shown, a.plView.groups, covers, withTools, foot...)
+	a.trackRowsGrouped(c, shown, groups, covers, withTools, foot...)
 }
 
 // pageArt is the picture a page opens under, if it has one: a cover held from
@@ -405,24 +426,23 @@ func (a *app) listTools(c *ui.Context, tracks, shown []netease.Track) {
 	}
 	p, v := a.pal, &a.plView
 	ui.Row(c.Key("tools")).Gap(10).AlignItems(ui.Center).Margin(0, 12, 10, 12).Children(func() {
-		var total time.Duration
-		for i := range tracks {
-			total += tracks[i].Length()
+		// An album open counts its own songs (ui_album_open.go).
+		_, open := a.albumOpen()
+		counted := tracks
+		if open {
+			counted = shown
 		}
-		line := fmt.Sprintf("共 %d 首 · %s", len(tracks), longTime(total))
+		var total time.Duration
+		for i := range counted {
+			total += counted[i].Length()
+		}
+		line := fmt.Sprintf("共 %d 首 · %s", len(counted), longTime(total))
 		if strings.TrimSpace(v.query) != "" {
 			line = fmt.Sprintf("找到 %d 首", len(shown))
 		}
 		ui.Text(c, line).FontSize(12.5).TextColor(p.muted).Grow(1).Shrink(1).MinWidth(0).SingleLine()
-		// Back to the song playing, when it is in the list: scrolled far
-		// from it, there was no way back but scrolling.
-		if cur := a.pl.Current(); cur != nil && !a.albumGridShown() {
-			if i := slices.IndexFunc(shown, func(t netease.Track) bool { return t.ID == cur.ID }); i >= 0 {
-				if iconButton(c.Key("locate"), iconLocate, 15, p.muted, "定位到正在播放").Size(32, 32).Clicked() {
-					a.trackList.ScrollTo(a.rowOfTrack(i), ui.Center)
-				}
-			}
-		}
+		// Back to the song playing is a button floating over the list
+		// (listFloats), as it scrolls out of view.
 		// A playlist's and the downloads' own menus start theirs.
 		if pg := a.route.page; pg != pagePlaylist && pg != pageDownloads && pg != pageLocal {
 			a.batchEntry(c)
@@ -453,7 +473,7 @@ func (a *app) listTools(c *ui.Context, tracks, shown []netease.Track) {
 		})
 		if len(v.all) > 1 {
 			a.albumIndexButton(c, v)
-			if v.sort == sortAlbum && a.albumGridPage() {
+			if v.sort == sortAlbum && a.albumGridPage() && !open {
 				a.albumViewSwitch(c)
 			}
 		}

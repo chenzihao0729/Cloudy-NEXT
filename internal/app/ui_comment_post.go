@@ -217,14 +217,14 @@ func (a *app) commentCountButton(c *ui.Context, tr *netease.Track, size float32,
 	if cs := a.commentsFor(tr); cs.loaded {
 		n = cs.total
 	}
-	wrap := ui.Box(c).Width(size + max(40, size*1.25)).Height(size + 16).AlignItems(ui.Start)
+	wrap := ui.Box(c).Width(countSlot(size, true)).Height(size + 16).AlignItems(ui.Start)
 	wrap.Children(func() {
 		on := a.npPane == paneComments
 		tint := color
 		if on {
 			tint = white
 		}
-		if iconButton(c.Key("comments"), iconComment, size*0.9, tint, "评论").Clicked() {
+		if commentIcon(c, size, tint, n > 0).Clicked() {
 			if on {
 				a.npPane = a.lyricsPaneChosen()
 			} else {
@@ -232,8 +232,7 @@ func (a *app) commentCountButton(c *ui.Context, tr *netease.Track, size float32,
 			}
 		}
 		if n > 0 {
-			ui.Text(c.Key("comment-count"), commentBadge(n)).FontSize(max(10, size*0.46)).FontWeight(700).FontFeatures("tnum").
-				TextColor(tint).Absolute().Top(-2).Left(8 + size*0.84).SingleLine().PassThrough()
+			notchCount(c.Key("comment-count"), commentBadge(n), size, tint)
 		}
 	})
 	return wrap
@@ -271,13 +270,9 @@ func (a *app) barCommentButton(c *ui.Context, tr *netease.Track, size float32, c
 	if !counted {
 		shown = 0
 	}
-	wide := size + 16
-	if shown > 0 {
-		wide = size + max(40, size*1.6)
-	}
-	wrap := ui.Box(c).Width(wide).Height(size + 16).AlignItems(ui.Start)
+	wrap := ui.Box(c).Width(countSlot(size, counted)).Height(size + 16).AlignItems(ui.Start)
 	wrap.Children(func() {
-		button := iconButton(c.Key("comments"), iconComment, size*0.9, color, "评论")
+		button := commentIcon(c, size, color, shown > 0)
 		if cs.loaded {
 			button.Tooltip(fmt.Sprintf("%d 条评论", n))
 		}
@@ -286,9 +281,19 @@ func (a *app) barCommentButton(c *ui.Context, tr *netease.Track, size float32, c
 			a.nowPlaying = true
 		}
 		if shown > 0 {
-			ui.Text(c.Key("comment-count"), commentBadge(n)).FontSize(max(10, size*0.46)).FontWeight(700).FontFeatures("tnum").
-				TextColor(color).Absolute().Top(-1).Left(8 + size*0.84).SingleLine().PassThrough()
+			notchCount(c.Key("comment-count"), commentBadge(n), size, color)
 		}
 	})
 	return wrap
+}
+
+// commentIcon is the speech bubble of the comments, a little smaller than
+// the heart beside it, in a button as big as the heart's; notched, its
+// upper right is open for the count.
+func commentIcon(c *ui.Context, size float32, color ui.Color, notched bool) ui.Element {
+	icon := iconComment
+	if notched {
+		icon = iconCommentNotch
+	}
+	return iconButton(c.Key("comments"), icon, size*0.9, color, "评论").Size(size+16, size+16)
 }

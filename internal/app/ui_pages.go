@@ -427,7 +427,10 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 	}
 	rowAt := func(i int) {
 		if i == 0 {
-			ui.Column(c).Children(func() {
+			// An album opening or closing: the head comes in with the rows.
+			head := ui.Column(c.Key(listView{album: a.plView.album}))
+			a.albumHeadIn(c, head)
+			head.Children(func() {
 				a.startMark(c)
 				header(c)
 			})
@@ -569,12 +572,12 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 	}
 	// The header stays as the rows under it switch between the songs and
 	// the grid, those coming sliding in from the side of their button.
-	ui.List(c.Key(a.route), &a.trackList, rows, func(i int) {
+	list := ui.List(c.Key(a.route), &a.trackList, rows, func(i int) {
 		if i == 0 {
 			rowAt(0)
 			return
 		}
-		view := ui.Column(c.Key(listView{grid}))
+		view := ui.Column(c.Key(listView{grid, a.plView.album}))
 		a.slideIn(c, view, grid)
 		view.Children(func() {
 			if !grid {
@@ -591,10 +594,22 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 			a.albumGridLine(c, i-1, cols, groups, tracks)
 		})
 	}).Grow(1).Padding(top+pageGap, pagePad-12, listBottom+32, pagePad-12).ScrollbarInsets(top, 0, listBottom, 0)
+	// Only while it glides (listFloats): kept always, the offset it wrote
+	// put the list a pixel off its rows where it was built again, as Now
+	// Playing closed over it. A glide starts from where the list shows.
+	if a.listScroll.Scrolling() {
+		list.TrackScroll(&a.listScroll)
+	}
+	a.listBox = list.LayoutBounds()
+	a.listFloats(c, listBottom, grid)
 }
 
-// listView keys the rows of a list apart as songs or as a grid of albums.
-type listView struct{ grid bool }
+// listView keys the rows of a list apart as songs or as a grid of albums,
+// and as the songs of an album opened.
+type listView struct {
+	grid  bool
+	album string // the album opened (ui_album_open.go), or ""
+}
 
 // nowPlayingBars dance in the row of the track playing.
 func (a *app) nowPlayingBars(c *ui.Context) {

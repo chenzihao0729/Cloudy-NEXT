@@ -72,3 +72,40 @@ func TestAddressFailuresKeepRetrying(t *testing.T) {
 		}
 	})
 }
+
+// A song the service refuses with its own code, or answers again and again
+// with no address, is skipped instead of holding the queue on it.
+func TestAddressRefusedSongIsSkipped(t *testing.T) {
+	for _, refusal := range []struct {
+		name  string
+		err   func() error
+		calls int
+	}{
+		{"song_code", func() error { return netease.ErrUnavailable }, 1},
+		{"no_address", func() error { return &netease.StreamError{Code: 200, Song: true} }, 1 + songRetries},
+	} {
+		t.Run(refusal.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				quietNavigation(t)
+				calls := 0
+				songURL = func(ctx context.Context, id int64, level string) (*netease.Stream, error) {
+					if id == 2 {
+						calls++
+						return nil, refusal.err()
+					}
+					return nil, &netease.StreamError{Code: 400}
+				}
+				p, ch := navigationPlayer(t, []netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
+				p.Next()
+				for range 6 {
+					settleRetries(ch)
+					time.Sleep(4 * time.Second)
+				}
+				settleRetries(ch)
+				if calls != refusal.calls || p.Current().ID != 3 {
+					t.Fatalf("refused song held the queue: calls=%d current=%d error=%q", calls, p.Current().ID, p.Err())
+				}
+			})
+		})
+	}
+}

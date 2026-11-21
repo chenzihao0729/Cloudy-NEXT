@@ -58,13 +58,22 @@ var (
 	iconTrash   = strokeIcon(`<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>`)
 	iconThumb   = strokeIcon(`<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>`)
 	iconComment = strokeIcon(`<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>`)
-	iconPlus    = strokeIcon(`<path d="M12 5v14"/><path d="M5 12h14"/>`)
-	iconCheck   = strokeIcon(`<path d="m5 12 4 4L19 6"/>`)
-	iconX       = strokeIcon(`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`)
-	iconMore    = fillIcon(`<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>`)
-	iconCopy    = strokeIcon(`<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>`)
-	iconLink    = strokeIcon(`<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>`)
-	iconAlbum   = strokeIcon(`<circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="2.5"/>`)
+
+	// The heart and the comments with their upper right left open for a
+	// count, as NetEase's apps have them: the notch is a circle about
+	// (20, 3.6), r 6.6 (countNotch), the same on both. The outlines end in
+	// round caps and the filled heart is stroked round, so no edge of the
+	// notch is sharp.
+	iconHeartNotch     = strokeIcon(`<path d="M13.52 4.66C12.95 5.05 12.44 5.55 12 6.15 10.9 4.65 9.35 3.75 7.55 3.75 4.75 3.75 2.5 5.95 2.5 8.85c0 4.2 4.6 7.85 8.52 11.28.28.25.63.37.98.37s.7-.12.98-.37C16.51 17.04 20.59 13.78 21.37 10.09"/>`)
+	iconHeartNotchFill = roundFillIcon(`<path d="M13.52 4.66C12.95 5.05 12.44 5.55 12 6.15 10.9 4.65 9.35 3.75 7.55 3.75 4.75 3.75 2.5 5.95 2.5 8.85c0 4.2 4.6 7.85 8.52 11.28.28.25.63.37.98.37s.7-.12.98-.37C16.51 17.04 20.59 13.78 21.37 10.09A6.6 6.6 0 0 1 13.52 4.66Z"/>`)
+	iconCommentNotch   = strokeIcon(`<path d="M13.46 3.12A9 9 0 0 0 4 16.1L2 22l5.9-2A9 9 0 0 0 20.81 10.18"/>`)
+	iconPlus           = strokeIcon(`<path d="M12 5v14"/><path d="M5 12h14"/>`)
+	iconCheck          = strokeIcon(`<path d="m5 12 4 4L19 6"/>`)
+	iconX              = strokeIcon(`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`)
+	iconMore           = fillIcon(`<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>`)
+	iconCopy           = strokeIcon(`<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>`)
+	iconLink           = strokeIcon(`<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>`)
+	iconAlbum          = strokeIcon(`<circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="2.5"/>`)
 )
 
 // iconThumbFill is iconThumb filled, its cuff and hand apart as the outline

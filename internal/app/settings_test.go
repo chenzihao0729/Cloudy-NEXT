@@ -311,36 +311,6 @@ func TestScrobbleNotOpen(t *testing.T) {
 	}
 }
 
-// With NM_FRAMES set, saves the desktop lyrics' capsule on its way out of
-// the button, a frame at each tenth of its way.
-func TestDeskFlyFrames(t *testing.T) {
-	dir := os.Getenv("NM_FRAMES")
-	if dir == "" {
-		t.Skip()
-	}
-	a := newTestApp()
-	a.settings = defaultSettings()
-	f := &deskFlight{opening: true, from: ui.Rect{X: 760, Y: 330, W: 32, H: 32},
-		to: ui.Rect{X: 60, Y: 40, W: 560, H: 65}, text: "我们在晚风里说再见", size: 32}
-	for i := 0; i <= 10; i++ {
-		out := float32(i) / 10
-		tt := ui.NewTester(func(c *ui.Context) {
-			a.pal = paletteFor(c.Theme())
-			ui.Box(c).Fill().Background(ui.Hex("#5b6b7a"))
-			a.paintDeskFly(c, f, out, 1)
-		}, 820, 380)
-		tt.Frame()
-		file, err := os.Create(filepath.Join(dir, fmt.Sprintf("deskfly-%02d.png", i)))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := png.Encode(file, tt.Image()); err != nil {
-			t.Fatal(err)
-		}
-		file.Close()
-	}
-}
-
 // The mail is off: its button says so and sending does nothing.
 func TestFeedbackMailClosed(t *testing.T) {
 	if feedbackMailOpen {

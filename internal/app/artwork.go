@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"image"
 	"image/color"
-	_ "image/jpeg"
+	"image/jpeg"
 	_ "image/png"
 	"math"
 	"slices"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 
 	"netease-music-mygo/internal/netease"
@@ -176,8 +177,37 @@ func loadArt(url string) (*ui.Bitmap, image.Image, int, error) {
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	if _, n := netease.LocalSize(url); n > 0 {
+		b = thumbnail(b, n)
+	}
 	bmp, img, err := decodeArt(b)
 	return bmp, img, len(b), err
+}
+
+// thumbnail makes a local cover, b, no larger than n pixels across, as the
+// image CDN makes NetEase's: kept small, its pixels are decoded again
+// quickly as a row comes back into view. Already small, or not a picture
+// it reads, it stays as it is.
+func thumbnail(b []byte, n int) []byte {
+	img, _, err := image.Decode(bytes.NewReader(stillCover(b)))
+	if err != nil {
+		return b
+	}
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	if w <= n && h <= n || w <= 0 || h <= 0 {
+		return b
+	}
+	tw, th := n, max(1, h*n/w)
+	if h > w {
+		tw, th = max(1, w*n/h), n
+	}
+	out := image.NewRGBA(image.Rect(0, 0, tw, th))
+	xdraw.CatmullRom.Scale(out, out.Bounds(), img, img.Bounds(), xdraw.Src, nil)
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, out, &jpeg.Options{Quality: 90}); err != nil {
+		return b
+	}
+	return buf.Bytes()
 }
 
 // decodeArt decodes a cover twice: as a bitmap, which keeps the data to

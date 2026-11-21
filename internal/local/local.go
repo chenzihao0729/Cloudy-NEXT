@@ -92,8 +92,7 @@ func Paths(dir string) ([]string, error) {
 		if d.IsDir() {
 			return nil
 		}
-		switch strings.ToLower(filepath.Ext(path)) {
-		case ".mp3", ".flac":
+		if Playable(filepath.Ext(path)) {
 			paths = append(paths, path)
 		}
 		return nil
@@ -125,8 +124,16 @@ func Read(path string) (*Song, error) {
 		readMP3(f, info.Size(), s)
 	case ".flac":
 		readFLAC(f, info.Size(), s)
+	case ".m4a", ".m4b":
+		readMP4(f, info.Size(), s)
+	case ".aac":
+		readADTS(f, info.Size(), s)
+	case ".dsf":
+		readDSF(f, info.Size(), s)
+	case ".dff":
+		readDFF(f, info.Size(), s)
 	default:
-		return nil, fmt.Errorf("local: %s is not an MP3 or a FLAC", path)
+		return nil, fmt.Errorf("local: %s is not a song the player plays", path)
 	}
 	infer(s)
 	return s, nil

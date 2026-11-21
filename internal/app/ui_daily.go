@@ -103,6 +103,7 @@ func (a *app) dailyCard(c *ui.Context, now time.Time, back bool) {
 			// At the display's rate: paced to dailyRate, the frames that only
 			// paint came unevenly on Windows once the pointer rested, the
 			// refreshes between skipped by more than they should be.
+			spin.to = turn
 			if spin.step(p.Now(), turn) {
 				p.AnimationFrame()
 			}
@@ -298,7 +299,9 @@ func b2f(b bool) float32 {
 // glides to a stop.
 type spinState struct {
 	angle, speed float64
-	last         time.Time
+	// to is the speed it eases to, which every painter of it steps by.
+	to   float64
+	last time.Time
 }
 
 // step turns the record on to now, its speed easing to to, and reports
@@ -458,7 +461,14 @@ func (a *app) dailyStack(c *ui.Context, songs []netease.Track, fanned bool, out 
 		ui.Box(c.Key("record")).Absolute().Left(mid+recordOut(out)-recordSize/2).Top((sleeveSize-recordSize)/2).
 			Size(recordSize, recordSize).Radius(recordSize/2).Shadow(0, 8, 20, -4, ui.RGBA(0, 0, 0, 0.5)).
 			Draw(func(p *ui.Painter, r ui.Rect) {
-				drawRecord(p, r, bitmap(a.art.get(netease.Sized(songs[0].Album.PicURL, 240), false)), float32(a.dailySpin.angle))
+				// It turns in its own frames too: those of the backdrop alone
+				// left it as it was painted once the pointer rested, and it
+				// stepped on as the view built again (a viewer, 1.3.1).
+				spin := &a.dailySpin
+				if spin.step(p.Now(), spin.to) {
+					p.AnimationFrame()
+				}
+				drawRecord(p, r, bitmap(a.art.get(netease.Sized(songs[0].Album.PicURL, 240), false)), float32(spin.angle))
 			})
 		// The sleeve.
 		sleeve := ui.Box(c.Key("sleeve")).Absolute().Left(sleeveLeft).Top(0).Size(sleeveSize, sleeveSize).Radius(14).

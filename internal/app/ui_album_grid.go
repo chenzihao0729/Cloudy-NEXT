@@ -56,7 +56,7 @@ func (a *app) switchView(grid bool) {
 	}
 	a.settings.AlbumGrid = grid
 	a.changed()
-	a.more.switchedAt = time.Now()
+	a.more.switchedAt, a.more.slideX = time.Now(), 0
 	if row > 0 {
 		a.trackList.ScrollTo(row, ui.Start)
 	}
@@ -74,6 +74,10 @@ func (a *app) slideIn(c *ui.Context, e ui.Element, grid bool) {
 	if !grid {
 		dx = -56
 	}
+	if a.more.slideX != 0 {
+		// An album opening, or closing (albumSlide).
+		dx = a.more.slideX
+	}
 	e.Transition(ui.ElementTransition{Animation: &viewSlide, Enter: &ui.Motion{X: dx}})
 }
 
@@ -89,7 +93,17 @@ func (a *app) albumViewSwitch(c *ui.Context) {
 	const seg, segH, inset = 32, 26, 3
 	chosen := float32(b2f(a.settings.AlbumGrid))
 	track := ui.Row(c.Key("album-view")).Height(segH + 2*inset).Padding(inset).Radius(999).Background(p.hover).AlignItems(ui.Center)
-	at := track.AnimateTo("at", chosen, ui.Animation{Spring: ui.SpringOptions{Duration: 280 * time.Millisecond, Bounce: 0.08}})
+	// The capsule glides by the time since it was clicked, kept in the app:
+	// the header the switch is in is built anew as the list under it
+	// switches (all but the downloads' were), and an animation of the
+	// element's own started there from where it was going (a viewer, 1.3.2).
+	sw := &a.more.capsule
+	at := chosen
+	if t := float32(c.Now().Sub(sw.at)) / float32(capsuleGlide); a.motion != motionOff && t >= 0 && t < 1 {
+		k := 1 - (1-t)*(1-t)*(1-t)
+		at = sw.from + (chosen-sw.from)*k
+		c.AnimationFrame()
+	}
 	capsule, shade := p.bg, p.cardShade
 	track.Draw(func(pt *ui.Painter, r ui.Rect) {
 		pill := ui.Rect{X: r.X + inset + at*seg, Y: r.Y + inset, W: seg, H: segH}
@@ -112,6 +126,7 @@ func (a *app) albumViewSwitch(c *ui.Context) {
 			}
 			b.Children(func() { ui.Icon(c, opt.icon).Size(14, 14).TextColor(col) })
 			if b.Clicked() && !on {
+				sw.from, sw.at = at, c.Now()
 				a.switchView(opt.grid)
 			}
 		}
@@ -135,8 +150,12 @@ func (a *app) albumGroupCard(c *ui.Context, g albumGroup, tracks []netease.Track
 	p := a.pal
 	card := ui.ButtonBase(c).Column().Gap(10).AlignItems(ui.Stretch).FocusRing(false).Label(g.name)
 	hovered := card.Hovered()
+	var artAt ui.Rect
 	card.Children(func() {
 		art := ui.Box(c).AspectRatio(1).Radius(14)
+		artAt = art.Bounds()
+		// Its cover flies back here as its album closes.
+		a.landBack(c, art, g.cover)
 		lift := ui.Pose{}
 		if hovered {
 			lift = ui.Pose{Y: -3}
@@ -163,7 +182,7 @@ func (a *app) albumGroupCard(c *ui.Context, g albumGroup, tracks []netease.Track
 		ui.Text(c, fmt.Sprintf("%s · %d 首", g.artist, g.n)).FontSize(12).TextColor(p.muted).SingleLine().Margin(-6, 0, 0, 0)
 	})
 	if card.Clicked() {
-		a.chooseAlbum(&a.plView, g.key)
+		a.openAlbum(g.key, g.cover, artAt)
 	}
 	return card
 }
@@ -172,3 +191,6 @@ var (
 	iconViewList = strokeIcon(`<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/>`)
 	iconViewGrid = strokeIcon(`<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>`)
 )
+
+// capsuleGlide is how long the capsule of the list/grid switch glides.
+const capsuleGlide = 300 * time.Millisecond

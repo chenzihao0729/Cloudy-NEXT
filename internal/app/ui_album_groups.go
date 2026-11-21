@@ -58,10 +58,9 @@ func albumLength(d time.Duration) string {
 // search narrows: the one chosen is all the list shows, until 全部专辑.
 func (a *app) albumIndexButton(c *ui.Context, v *plView) {
 	p := a.pal
+	// An album chosen opens as a page of its own (albumHead), whose head
+	// says which and goes back: the chip stays the index, not a filter.
 	chosen := ""
-	if len(v.groups) == 1 && v.album != "" && v.groups[0].key == v.album {
-		chosen = v.groups[0].name
-	}
 	b := ui.ButtonBase(c.Key("album-index")).Height(32).PaddingX(12).Gap(6).Radius(999).AlignItems(ui.Center).FocusRing(false).
 		Label(indexName(v)).MaxWidth(240)
 	bg := p.hover
@@ -177,12 +176,14 @@ func (a *app) albumRow(c *ui.Context, ink paneInk, name, note, cover string, che
 	return b
 }
 
-// chooseAlbum keeps the list to the album of key, or "" to all of them,
-// from its top.
+// chooseAlbum opens the album of key, or with "" goes back to all of them
+// (ui_album_open.go).
 func (a *app) chooseAlbum(v *plView, key string) {
-	v.album, v.indexOpen = key, false
-	a.trackList.ScrollTo(0, ui.Start)
-	a.redraw()
+	if key == "" {
+		a.closeAlbum()
+		return
+	}
+	a.openAlbum(key, "", ui.Rect{})
 }
 
 // winHeight is how tall the window is.

@@ -14,7 +14,7 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     defaults:
       run:
         shell: bash
@@ -37,5 +37,6 @@ jobs:
           fi
       - name: go vet
         run: go vet ./internal/...
+      # internal/app alone takes about 12 minutes, past go test's 10.
       - name: go test
-        run: go test ./internal/...
+        run: go test -timeout 40m ./internal/...

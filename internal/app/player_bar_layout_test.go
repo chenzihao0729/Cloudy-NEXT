@@ -130,6 +130,24 @@ func TestPlayerBarCompactCounts(t *testing.T) {
 	}
 }
 
+// Roomy, the controls sit in the middle of the bar; narrower, the progress
+// is no shorter than in 1.3.1 (about 250 at 1180).
+func TestPlayerBarCentered(t *testing.T) {
+	for _, width := range []int{1180, 1440, 1680} {
+		a := playerBarLayoutApp()
+		tt := playerBarTester(a, width)
+		play := barElement(t, tt, "播放/暂停")
+		progress := barElement(t, tt, "播放进度")
+		bar := a.barBox
+		if d := play.X + play.W/2 - (bar.X + bar.W/2); width >= 1440 && (d > 4 || d < -4) {
+			t.Fatalf("%d: play is %.1f off the bar's center (bar=%+v play=%+v)", width, d, bar, play)
+		}
+		if progress.W < 250 {
+			t.Fatalf("%d: progress squeezed to %.0f", width, progress.W)
+		}
+	}
+}
+
 // The compact menu retains mode selection and playlist actions; its
 // visible comment button still opens the current song's comments.
 func TestPlayerBarCompactActions(t *testing.T) {
@@ -195,5 +213,42 @@ func TestPlayerBarResponsiveFrames(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+	}
+}
+
+// The heart and the comments stand in slots of one width, counts or not
+// (a viewer, 1.3.2-test.1). The queue belongs just after Add to Playlist
+// and before Volume, even as the wide bar becomes compact.
+func TestPlayerBarEvenSteps(t *testing.T) {
+	for _, width := range []int{1180, 1440} {
+		a := playerBarLayoutApp()
+		tt := playerBarTester(a, width)
+		heart, comments := barElement(t, tt, "喜欢"), barElement(t, tt, "评论")
+		add, queue, volume := barElement(t, tt, "添加到歌单"), barElement(t, tt, "播放列表"), barElement(t, tt, "音量")
+		if d := comments.X - heart.X - countSlot(16, true) - 4; d > 0.5 || d < -0.5 {
+			t.Fatalf("%d: heart=%+v comments=%+v not one slot apart", width, heart, comments)
+		}
+		if gap := queue.X - (add.X + add.W); gap < 0 || gap > 5 || queue.X+queue.W > volume.X {
+			t.Fatalf("%d: want add, queue, volume adjacent, got %+v %+v %+v", width, add, queue, volume)
+		}
+		for _, name := range []string{"桌面歌词", "歌词翻译", "添加到歌单", "播放列表", "音量", "歌曲详情"} {
+			if r := barElement(t, tt, name); r.W < 33 {
+				t.Fatalf("%d: %q still has its old size: %+v", width, name, r)
+			}
+		}
+		for name, minW := range map[string]float32{a.pl.Mode().Name(): 28, "上一首": 33, "播放/暂停": 41, "下一首": 33} {
+			if r := barElement(t, tt, name); r.W < minW {
+				t.Fatalf("%d: %q still has its old size: %+v", width, name, r)
+			}
+		}
+		if !tt.HasText("999+") {
+			t.Fatalf("%d: roomy bar lost its comment count", width)
+		}
+	}
+	a := playerBarLayoutApp()
+	tt := playerBarTester(a, 880)
+	trans, queue, volume := barElement(t, tt, "歌词翻译"), barElement(t, tt, "播放列表"), barElement(t, tt, "音量")
+	if queue.X < trans.X+trans.W || queue.X+queue.W > volume.X {
+		t.Fatalf("compact queue is no longer with the tools: %+v %+v %+v", trans, queue, volume)
 	}
 }

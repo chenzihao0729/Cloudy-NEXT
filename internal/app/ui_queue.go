@@ -100,14 +100,14 @@ func (a *app) queueRows(c *ui.Context, list *ui.ListState, at *int, look queueLo
 				a.artistLinks(c, tr, look.artist, look.text).FontSize(12.5).SingleLine()
 			})
 			ui.Text(c, clock(tr.Length())).FontSize(12).FontFeatures("tnum").TextColor(look.time)
-			// The song playing stays: there would be nothing in its place.
-			if !playing {
-				reveal(ui.Box(c.Key("remove-reveal")), row.Hovered()).Children(func() {
+			// 播放中的歌曲不可移除，但仍保留操作区，让各行时长对齐。
+			reveal(ui.Box(c.Key("remove-reveal")).Size(26, 26).Shrink(0), row.Hovered()).Children(func() {
+				if !playing {
 					if iconButton(c.Key("remove"), iconX, 12, look.artist, "从待播清单移除").Size(26, 26).Clicked() {
 						pl.RemoveAt(r)
 					}
-				})
-			}
+				}
+			})
 		})
 		if row.Clicked() && tr.Playable() && !playing {
 			pl.Jump(i)
@@ -117,13 +117,13 @@ func (a *app) queueRows(c *ui.Context, list *ui.ListState, at *int, look queueLo
 
 // queueButton opens the queue from the player bar, in a pane over the
 // page: the songs to play, the one playing in view.
-func (a *app) queueButton(c *ui.Context, color ui.Color) {
+func (a *app) queueButton(c *ui.Context, color ui.Color, size float32) {
 	q := &a.more.queue
 	tint := color
 	if q.open {
 		tint = a.pal.accent
 	}
-	b := iconButton(c.Key("queue-button"), iconQueue, 16, tint, "播放列表")
+	b := iconButton(c.Key("queue-button"), iconQueue, size, tint, "播放列表")
 	if b.Clicked() {
 		q.open = !q.open
 	}

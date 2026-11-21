@@ -109,7 +109,7 @@ func TestSongURLFallsBackToWeb(t *testing.T) {
 func TestSongURLItemCodesAreUnavailable(t *testing.T) {
 	old := http.DefaultTransport
 	defer func() { http.DefaultTransport = old }()
-	for code, want := range map[string]error{"404": ErrNoCopyright, "-110": ErrUnavailable} {
+	for code, want := range map[string]error{"404": ErrNoCopyright, "-110": ErrUnavailable, "-10": ErrUnavailable, "-100": ErrUnavailable} {
 		http.DefaultTransport = songContextTransport(func(r *http.Request) (*http.Response, error) {
 			body := `{"code":200,"data":[{"id":1,"url":null,"code":` + code + `}]}`
 			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil

@@ -208,3 +208,40 @@ func TestShortcutRecordingPausesKeys(t *testing.T) {
 		t.Fatal("the keys did not come back")
 	}
 }
+
+// One shortcut turned off is not registered, not even its default, and
+// the others still are; on again, it has its default back.
+func TestShortcutTurnedOff(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.settings.GlobalKeys = true
+	oldRegister, oldUnregister := registerShortcut, unregisterShortcut
+	registerShortcut = func(string, func()) error { return nil }
+	unregisterShortcut = func(string) {}
+	defer func() { registerShortcut, unregisterShortcut = oldRegister, oldUnregister }()
+	a.applyGlobalKeys()
+	var act shortcutAction
+	for _, s := range shortcutActions {
+		if len(s.keys) > 0 {
+			act = s
+			break
+		}
+	}
+	a.setShortcutOff(act, true)
+	if key := a.keys.bound[act.id]; key != "" {
+		t.Fatalf("turned off, %s still has %s", act.id, key)
+	}
+	if a.keys.taken != 0 {
+		t.Fatalf("a shortcut turned off counts as taken by another app")
+	}
+	if got := a.shortcutDisplay(act); got != "已禁用" {
+		t.Fatalf("shows %q", got)
+	}
+	if len(a.keys.bound) == 0 {
+		t.Fatal("the other shortcuts went with it")
+	}
+	a.setShortcutOff(act, false)
+	if key := a.keys.bound[act.id]; key != act.keys[0] {
+		t.Fatalf("on again, %s has %q, not its default", act.id, key)
+	}
+}

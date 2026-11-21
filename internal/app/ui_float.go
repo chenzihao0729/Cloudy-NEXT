@@ -80,6 +80,8 @@ func (a *app) applyDeskLyrics() {
 			s.DeskLyrics = false
 			a.applyDeskLyrics()
 		})
+		// It fades in as the lyrics land, not as the system shows it.
+		showAtOnce(a.deskWin.NativeHandle())
 		a.deskWin.OnMove(func() {
 			if a.deskWin != nil && a.deskWin.IsVisible() {
 				b := a.deskWin.Bounds()
@@ -92,7 +94,7 @@ func (a *app) applyDeskLyrics() {
 	}
 	a.deskWin.SetIgnoreMouseEvents(s.DeskLyrics && s.DeskLock)
 	if s.DeskLyrics {
-		if a.deskFly.win != nil && a.deskFly.opening {
+		if a.deskFly.coming || (a.deskFly.win != nil && a.deskFly.opening) {
 			// Out of the button: the window comes in as the lyrics land.
 			a.deskWin.SetOpacity(0)
 		}
@@ -124,10 +126,15 @@ func (a *app) toggleDeskLyrics() {
 	s.DeskLyrics = !s.DeskLyrics
 	switch {
 	case s.DeskLyrics:
-		// Out of the button, to where the window goes.
+		// Out of the button, to where the window goes: the flight after
+		// the window, to be over it.
 		x, y := spot(s.DeskX, s.DeskY, deskW, deskH, 40)
-		a.startDeskFly(true, mygo.Rectangle{X: x, Y: y, Width: deskW, Height: deskH})
+		a.deskFly.coming = true
 		a.applyDeskLyrics()
+		a.deskFly.coming = false
+		if a.deskWin != nil && !a.startDeskFly(true, mygo.Rectangle{X: x, Y: y, Width: deskW, Height: deskH}) {
+			a.deskWin.SetOpacity(1)
+		}
 	case a.deskWin != nil && a.startDeskFly(false, a.deskWin.Bounds()):
 		// It goes back into the button first, and its window after.
 		a.deskWin.SetIgnoreMouseEvents(true)
@@ -198,12 +205,15 @@ func (a *app) deskView(c *ui.Context) {
 	s, pl := &a.settings, a.pl
 	lines, _ := a.shownLyrics()
 	pos := a.lyricPos()
-	cur := lyrics.Index(lines, pos)
 	scale := float32(1)
 	if s.DeskScale > 0 {
 		scale = float32(s.DeskScale)
 	}
 	look := a.deskLookOf(s.DeskStyle)
+	main, next := a.deskLines()
+	// While the line flies out of its button, or back, the flight shows
+	// it; and the line under it comes in once it is down.
+	shown, nextShown := a.deskFlyShown(c.Now())
 	// The lyrics hang from a line under the room for their tools, rather
 	// than in the middle: the tools stay just over them however many lines
 	// or how large, and the line sung stays put as the one under it comes
@@ -219,20 +229,20 @@ func (a *app) deskView(c *ui.Context) {
 			body.Padding(10, 28).Radius(26).Background(look.pill)
 		}
 		body.Children(func() {
-			tr := pl.Current()
-			switch {
-			case tr == nil:
-				a.deskLine(c, "main", mygo.App.Name(), nil, pos, 30*scale, look, true)
-			case len(lines) == 0 || cur < 0:
-				a.deskLine(c, "main", tr.Name, nil, pos, 30*scale, look, true)
-			default:
-				l := &lines[cur]
-				a.deskLine(c, "main", l.Text, l.Words, pos, 32*scale, look, true)
-				switch {
-				case l.Translation != "" && a.settings.LyricTrans:
-					a.deskLine(c, "next", l.Translation, nil, pos, 19*scale, look, false)
-				case cur+1 < len(lines):
-					a.deskLine(c, "next", lines[cur+1].Text, nil, pos, 19*scale, look, false)
+			line := a.deskLine(c, "main", main.text, main.words, pos, main.size, look, true)
+			// Where it lies, for the characters flying to it, or from it.
+			a.deskLineAt = line.LayoutBounds()
+			if a.deskFly.win != nil {
+				a.deskFly.at = a.deskLineAt
+			}
+			if shown < 1 {
+				line.Opacity(shown)
+			}
+			if next != "" {
+				under := a.deskLine(c, "next", next, nil, pos, 19*scale, look, false)
+				if nextShown < 1 {
+					under.Opacity(nextShown)
+					c.AnimationFrame()
 				}
 			}
 		})
@@ -251,7 +261,7 @@ func (a *app) deskView(c *ui.Context) {
 // is, word by word too: a line of runs and the same text in one run are not
 // always as wide, kana and hanzi falling back to fonts of their own, and an
 // edge laid out the other way drifted off its words along the line.
-func (a *app) deskLine(c *ui.Context, key, text string, words []lyrics.Word, pos time.Duration, size float32, look deskLook, main bool) {
+func (a *app) deskLine(c *ui.Context, key, text string, words []lyrics.Word, pos time.Duration, size float32, look deskLook, main bool) ui.Element {
 	style := func(e ui.Element) ui.Element {
 		weight := 700
 		if main {
@@ -274,7 +284,7 @@ func (a *app) deskLine(c *ui.Context, key, text string, words []lyrics.Word, pos
 	flat := func(color ui.Color) func(lyrics.Word) ui.Color {
 		return func(lyrics.Word) ui.Color { return color }
 	}
-	ui.Box(c.Key(key)).Shrink(0).PassThrough().Children(func() {
+	return ui.Box(c.Key(key)).Shrink(0).PassThrough().Children(func() {
 		// Positioned elements paint over those in the flow, in order: the
 		// line itself is positioned too, last, and this holds its place.
 		lay("room", flat(ui.Transparent)).Opacity(0)
@@ -644,9 +654,16 @@ func (a *app) makeMini() {
 	}
 }
 
+// onShowMini, when set, stands in for showMini, for the tests.
+var onShowMini func(*app)
+
 // showMini puts the player in its small window, in place of the main one: the
 // bar goes there, and the window around it fades.
 func (a *app) showMini() {
+	if onShowMini != nil {
+		onShowMini(a)
+		return
+	}
 	if a.win == nil || a.morph.win != nil {
 		return
 	}

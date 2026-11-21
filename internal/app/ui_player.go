@@ -209,8 +209,8 @@ func (a *app) tickTimes(c *ui.Context) {
 // percent over it. It opens as the pointer comes over the speaker, which
 // shows that the wheel there turns it, and closes a moment after the
 // pointer has left both; a click keeps it open until a click elsewhere.
-func (a *app) volumeButton(c *ui.Context, color ui.Color) {
-	b := iconButton(c.Key("volume-button"), volumeIcon(a.volume), 16, color, "音量")
+func (a *app) volumeButton(c *ui.Context, color ui.Color, size float32) {
+	b := iconButton(c.Key("volume-button"), volumeIcon(a.volume), size, color, "音量")
 	h := &a.volumeHover
 	now := c.Now()
 	if b.Clicked() {
@@ -304,6 +304,7 @@ func (a *app) nativeVolumeSlider(c *ui.Context, pop popover) {
 	}
 	if s.Changed() {
 		a.pl.SetVolume(a.volume)
+		a.keepVolume()
 	}
 	s.HandleInput(func(ev ui.InputEvent) bool { return a.scrollVolume(ev) })
 	pressed := s.Pressed()
@@ -336,6 +337,7 @@ func (a *app) scrollVolume(ev ui.InputEvent) bool {
 	// touchpad's finer deltas stay fine.
 	a.volume = min(1, max(0, a.volume-float64(ev.DY)/10000))
 	a.pl.SetVolume(a.volume)
+	a.keepVolume()
 	return true
 }
 
@@ -371,6 +373,7 @@ func (a *app) toggleMute() {
 		a.volume = 0.5
 	}
 	a.pl.SetVolume(a.volume)
+	a.keepVolume()
 }
 
 // volumeSlider is a slim slider with the speaker before it, which mutes.
@@ -380,6 +383,7 @@ func (a *app) volumeSlider(c *ui.Context, color, track ui.Color, width float32) 
 		s := ui.SliderBase(c.Key("volume"), &a.volume, 0, 1).Width(width).Height(16).FocusRing(false).Label("音量")
 		if s.Changed() {
 			a.pl.SetVolume(a.volume)
+			a.keepVolume()
 		}
 		hot := s.Hovered() || s.Pressed()
 		thick := float32(4)
@@ -411,7 +415,6 @@ func (a *app) transport(c *ui.Context, color, dim, on ui.Color, size float32) {
 // squeezing the song's title. A compact bar keeps it: listeners missed
 // 单曲循环 most of what a compact bar puts away.
 func (a *app) transportRow(c *ui.Context, color, dim, on ui.Color, size float32, noMode bool) {
-	compact := noMode
 	pl := a.pl
 	ui.Row(c).Gap(size * 0.5).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 		// One button goes through the modes, lit but in order.
@@ -420,7 +423,7 @@ func (a *app) transportRow(c *ui.Context, color, dim, on ui.Color, size float32,
 		if mode == player.ModeOrder {
 			tint = dim
 		}
-		if !compact {
+		if !noMode {
 			if iconButton(c.Key("mode"), modeIcon(mode), size*0.62, tint, mode.Name()).Clicked() {
 				a.say("mode", pl.CycleMode().Name())
 			}
@@ -440,7 +443,7 @@ func (a *app) transportRow(c *ui.Context, color, dim, on ui.Color, size float32,
 			pl.Next()
 		}
 		// As wide as the mode's button, for play to stay in the middle.
-		if !compact {
+		if !noMode {
 			ui.Box(c).Width(size*0.62 + 16).Height(1)
 		}
 	})
@@ -462,6 +465,10 @@ func modeIcon(m player.PlayMode) *ui.SVG {
 // barNoModeWidth is the room in the player bar under which its play mode
 // button moves into the details menu.
 const barNoModeWidth = 620
+
+// barCenteredMiddle is the least middle, controls over the progress, kept
+// centered between sides of one width.
+const barCenteredMiddle = 400
 
 // The bar of glass floats as a capsule, its corners concentric with those of
 // the cover it holds, in the room the bar along the foot takes: pages don't
@@ -515,9 +522,33 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 	compact := available < 840
 	// The play mode goes into the menu only well under that.
 	noMode := available < barNoModeWidth
-	gap, songWidth := float32(20), min(float32(380), max(float32(300), available*0.32))
+	// The controls and the progress keep the middle, between sides that
+	// share what is left, as up to 1.2.12: in 1.3.0 the song took a fixed
+	// share with the counts beside its heart, which squeezed the progress
+	// and pushed the controls off center. The counts sit in notches of the
+	// icons now, and a compact bar keeps them in the tooltips.
+	// The song side keeps its cover, a readable title (96), the heart and
+	// the comments. The queue always sits with the tools on the other side.
+	const toolIcon, toolGap = 18, 4
+	const toolButton = toolIcon + 16 // icon and the padding of roundButton
+	gap := float32(20)
+	tools := float32(6*toolButton + 5*toolGap)
+	songMin := 48 + 12 + 96 + 2*(countSlot(16, true)+4)
 	if compact {
-		gap, songWidth = 12, min(float32(280), max(float32(232), available*0.38))
+		gap = 12
+		tools = 4*toolButton + 3*toolGap // translation, the queue, the speaker, the details
+		songMin = 48 + 12 + 96 + 2*(countSlot(16, false)+4)
+	}
+	// Sides of one width keep the controls centered when that leaves the
+	// middle a long progress; short of it, the sides keep only what they
+	// need and the middle takes the rest, off center but longest.
+	middle := min(float32(600), max(available*0.45, barCenteredMiddle))
+	centered := available-2*gap-2*max(songMin, tools) >= barCenteredMiddle
+	sideGrow := float32(1)
+	if centered {
+		middle = min(middle, available-2*gap-2*max(songMin, tools))
+	} else {
+		middle, sideGrow = 160, 0
 	}
 	bar := ui.Row(c).Absolute().Gap(gap).AlignItems(ui.Center)
 	a.barBox = bar.LayoutBounds()
@@ -529,11 +560,8 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 		bar.Left(0).Right(0).Bottom(0).Height(playerBarHeight).PaddingX(20)
 	}
 	bar.Children(func() {
-		// What plays, in its own share of the bar. Its title comes before the
-		// heart's and the comments' counts: a compact bar keeps the counts in
-		// the buttons' tooltips.
-		counts := !compact
-		ui.Row(c.Key("song-info")).Width(songWidth).Shrink(0).Gap(4).AlignItems(ui.Center).Opacity(foreground).Children(func() {
+		// What plays, with the heart and the comments.
+		ui.Row(c.Key("song-info")).Grow(sideGrow).Basis(0).MinWidth(songMin).Gap(4).AlignItems(ui.Center).Opacity(foreground).Children(func() {
 			if tr == nil {
 				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 					ui.Box(c).Size(48, 48).Radius(cover).Background(p.hover).Center().Children(func() {
@@ -599,14 +627,16 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 			if info.Clicked() {
 				a.nowPlaying = true
 			}
-			a.countedHeart(c.Key("like"), tr, 16, muted, counts).Shrink(0)
-			a.barCommentButton(c.Key("comment-count"), tr, 16, muted, counts).Shrink(0)
+			// Each in a slot of one width, so that they stand at even
+			// steps; roomy, the counts sit in notches of their icons.
+			a.countedHeart(c.Key("like"), tr, 16, muted, !compact).Shrink(0)
+			a.barCommentButton(c.Key("comment-count"), tr, 16, muted, !compact).Shrink(0)
 		})
 
 		// Controls over the progress.
-		ui.Column(c.Key("transport")).Grow(1).MinWidth(120).Gap(0).AlignItems(ui.Stretch).Opacity(foreground).Children(func() {
+		ui.Column(c.Key("transport")).Width(middle).Grow(1 - sideGrow).Shrink(0).Gap(0).AlignItems(ui.Stretch).Opacity(foreground).Children(func() {
 			a.playFlies = a.lifted
-			a.transportRow(c, p.text, muted, p.accent, 18, noMode)
+			a.transportRow(c, p.text, muted, p.accent, 21, noMode)
 			a.playFlies = nil
 			a.barSpot.play = a.playSpot
 			if tr == nil {
@@ -628,19 +658,16 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 		})
 
 		// The floating windows, the volume, and the song's details.
-		ui.Row(c.Key("bar-tools")).Shrink(0).AlignItems(ui.Center).Gap(4).Opacity(foreground).Children(func() {
+		ui.Row(c.Key("bar-tools")).Grow(sideGrow).Basis(0).MinWidth(tools).Justify(ui.End).AlignItems(ui.Center).Gap(toolGap).Opacity(foreground).Children(func() {
 			desk := muted
 			if a.settings.DeskLyrics {
 				desk = p.accent
 			}
 			if !compact {
-				deskBtn := iconButton(c.Key("desk-lyrics"), iconSubtitles, 16, desk, "桌面歌词")
+				deskBtn := iconButton(c.Key("desk-lyrics"), iconSubtitles, toolIcon, desk, "桌面歌词")
 				a.deskBtn = deskBtn.LayoutBounds()
 				if deskBtn.Clicked() {
 					a.toggleDeskLyrics()
-				}
-				if iconButton(c.Key("mini"), iconMiniWin, 16, muted, "迷你窗口").Clicked() {
-					a.showMini()
 				}
 			}
 			// The song's translation under each line of its lyrics, lit
@@ -649,23 +676,22 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 			if a.settings.LyricTrans {
 				trans = p.accent
 			}
-			if iconButton(c.Key("lyric-trans"), iconTranslate, 16, trans, "歌词翻译").Clicked() {
+			if iconButton(c.Key("lyric-trans"), iconTranslate, toolIcon, trans, "歌词翻译").Clicked() {
 				a.toggleLyricTrans()
 			}
-			// Adding the song playing to one of the listener's playlists.
 			if !compact && tr != nil && tr.ProgramID == 0 && tr.ID > 0 {
-				add := iconButton(c.Key("add-to-playlist"), iconListPlus, 16, muted, "添加到歌单")
+				add := iconButton(c.Key("add-to-playlist"), iconListPlus, toolIcon, muted, "添加到歌单")
 				if add.Clicked() {
 					a.addToPlaylistMenu(add, tr)
 				}
 			}
-			a.queueButton(c, muted)
-			a.volumeButton(c, p.text.Alpha(0.75))
+			a.queueButton(c, muted, toolIcon)
+			a.volumeButton(c, p.text.Alpha(0.75), toolIcon)
 			if tr != nil {
 				if compact {
-					a.songMenuLabeled(c.Key("details"), tr, 16, muted, "歌曲详情", a.compactPlayerActions(tr))
+					a.songMenuLabeled(c.Key("details"), tr, toolIcon, muted, "歌曲详情", a.compactPlayerActions(tr))
 				} else {
-					a.songMenuLabeled(c.Key("details"), tr, 16, muted, "歌曲详情")
+					a.songMenuLabeled(c.Key("details"), tr, toolIcon, muted, "歌曲详情")
 				}
 			}
 		})

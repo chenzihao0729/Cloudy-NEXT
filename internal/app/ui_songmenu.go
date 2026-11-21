@@ -78,6 +78,9 @@ func (a *app) songActions(tr *netease.Track, pid int64) [][]menuAction {
 	if lists := a.playlistActions(tr, pid); len(lists) > 0 {
 		groups = append(groups, lists)
 	}
+	if label, do := a.dislikeKind(tr); do != nil {
+		groups = append(groups, []menuAction{{label: label, icon: iconTrash, do: do}})
+	}
 	return groups
 }
 

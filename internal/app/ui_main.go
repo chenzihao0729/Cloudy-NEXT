@@ -358,6 +358,10 @@ func (a *app) back() {
 		a.nowPlaying = false
 		return
 	}
+	if _, open := a.albumOpen(); open && a.plView.route == a.route {
+		a.closeAlbum()
+		return
+	}
 	if len(a.history) == 0 {
 		return
 	}
@@ -579,8 +583,12 @@ func (a *app) pageTop(c *ui.Context, foreground float32) {
 			Material(glass.ScrollEdge{Hard: true, Background: a.pal.bg})
 		edge.Opacity(edgeShown(edge, a.underTop))
 	}
-	// The settings, left of the window's own buttons, where apps keep them.
-	ui.Row(c.Key("top-settings")).Absolute().Top(0).Right(c.TitleBar().Right + 10).Height(topBar(c)).AlignItems(ui.Center).Opacity(foreground).Children(func() {
+	// The settings, left of the window's own buttons, where apps keep them;
+	// the mini window beside them, at any width (PR #11, kept in 1.3.2).
+	ui.Row(c.Key("top-settings")).Absolute().Top(0).Right(c.TitleBar().Right + 10).Height(topBar(c)).Gap(4).AlignItems(ui.Center).Opacity(foreground).Children(func() {
+		if iconButton(c.Key("mini"), iconMiniWin, 17, a.pal.muted, "迷你窗口").Clicked() {
+			a.showMini()
+		}
 		if iconButton(c.Key("settings"), iconSettings, 17, a.pal.muted, "设置").Clicked() {
 			a.openSettings()
 		}
@@ -607,6 +615,7 @@ func (a *app) content(c *ui.Context, foreground float32) {
 	// list, as a page's tabs in its header, opens it as the list builds.
 	if a.scrolled != a.route {
 		a.trackList, a.pageScroll, a.scrolled = ui.ListState{}, ui.ScrollState{}, a.route
+		a.listScroll, a.listLocate = ui.ScrollState{}, -1
 		a.pageScroll.Y, a.restoreY = a.restoreY, 0
 	}
 	a.headAt = ui.Rect{}

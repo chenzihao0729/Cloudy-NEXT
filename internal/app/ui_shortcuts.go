@@ -21,8 +21,15 @@ func (a *app) openShortcutEditor() {
 	a.redraw()
 }
 
+// shortcutOff is the key of an action the listener turned off, one by one
+// (a viewer, 1.3.1): it then has none, not even its default.
+const shortcutOff = "off"
+
 func (a *app) shortcutDisplay(act shortcutAction) string {
 	custom := strings.TrimSpace(a.settings.Shortcuts[act.id])
+	if custom == shortcutOff {
+		return "已禁用"
+	}
 	if !a.settings.GlobalKeys {
 		if custom != "" {
 			return keyLabel(custom)
@@ -109,6 +116,17 @@ func (a *app) shortcutEditorDialog(c *ui.Context) {
 								}
 								a.redraw()
 							}
+							// Off, one by one: a key the listener needs in
+							// another app, say. On again, it has its
+							// default.
+							off := strings.TrimSpace(a.settings.Shortcuts[act.id]) == shortcutOff
+							toggle := "禁用"
+							if off {
+								toggle = "启用"
+							}
+							if !recording && k.button("off-"+act.id, toggle, nil, false, false).Width(60).Justify(ui.Center).Clicked() {
+								a.setShortcutOff(act, !off)
+							}
 						})
 					}
 				})
@@ -140,8 +158,11 @@ func (a *app) shortcutEditorDialog(c *ui.Context) {
 // keycaps shows a combination as keys, each on a cap of its own: Ctrl,
 // Alt, then the key.
 func keycaps(c *ui.Context, keys string, ink paneInk) {
-	if keys = strings.TrimSpace(keys); keys == "" || keys == "未设置" {
-		ui.Text(c, "未设置").FontSize(12.5).TextColor(ink.faint)
+	if keys = strings.TrimSpace(keys); keys == "" || keys == "未设置" || keys == "已禁用" {
+		if keys == "" {
+			keys = "未设置"
+		}
+		ui.Text(c, keys).FontSize(12.5).TextColor(ink.faint)
 		return
 	}
 	// What is said of it, as that it is not registered, after the caps.
@@ -300,4 +321,22 @@ func keyLabel(acc string) string {
 		}
 	}
 	return strings.Join(parts, "+")
+}
+
+// setShortcutOff turns act's key off, or back on with its default.
+func (a *app) setShortcutOff(act shortcutAction, off bool) {
+	if off {
+		if a.settings.Shortcuts == nil {
+			a.settings.Shortcuts = map[string]string{}
+		}
+		a.settings.Shortcuts[act.id] = shortcutOff
+		a.toast = "已禁用「" + act.label + "」的快捷键"
+	} else {
+		delete(a.settings.Shortcuts, act.id)
+		a.toast = "已启用「" + act.label + "」的快捷键"
+	}
+	a.settings.save()
+	a.applyGlobalKeys()
+	a.keys.setup.err = ""
+	a.redraw()
 }

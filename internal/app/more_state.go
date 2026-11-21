@@ -25,6 +25,15 @@ type moreState struct {
 	// grid held (ui_album_grid.go).
 	switchedAt time.Time
 	gridCols   int
+	// capsule is the glide of the capsule of the list/grid switch: from
+	// where, and since when (albumViewSwitch).
+	capsule struct {
+		from float32
+		at   time.Time
+	}
+	// slideX is where the rows come in from as an album opens or closes
+	// (ui_album_open.go), or 0 as the view switches.
+	slideX float32
 	// intro is the dialog of an introduction; introCache, the artists'.
 	intro      introView
 	introCache map[int64]artistIntro
