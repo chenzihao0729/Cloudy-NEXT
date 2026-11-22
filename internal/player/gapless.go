@@ -67,7 +67,7 @@ func (n *preload) discard() {
 func (p *Player) startPreload(at int) {
 	t := p.queue[p.order[at]]
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	preferFallback := p.PreferFallback != nil && p.PreferFallback(t)
+	preferFallback := t.Source != nil || (p.PreferFallback != nil && p.PreferFallback(t))
 	n := &preload{at: at, id: t.ID, level: p.level(), preferFallback: preferFallback, cancel: cancel,
 		audio: make(chan struct{}), words: make(chan struct{}), art: make(chan struct{})}
 	p.pre = n
@@ -122,6 +122,11 @@ func (p *Player) level() string {
 // what a downloaded song falls back to offline, or when NetEase has none.
 func fetchLyrics(t netease.Track) []lyrics.Line {
 	var lines []lyrics.Line
+	if t.Source != nil && t.Source.LyricURL != "" {
+		if b, err := netease.Fetch(t.Source.LyricURL); err == nil {
+			lines = lyrics.FromText(string(b))
+		}
+	}
 	var err error = errNoLyrics
 	if t.ID > 0 {
 		var lrc, trans, yrc string

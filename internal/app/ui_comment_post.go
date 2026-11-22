@@ -37,7 +37,7 @@ type commentDraft struct {
 
 // commentable reports whether tr is a song with comments at NetEase.
 func commentable(tr *netease.Track) bool {
-	return tr.ID > 0
+	return tr != nil && tr.Source == nil && tr.ID > 0
 }
 
 // commentComposer is the field to write a comment in, over the comments,

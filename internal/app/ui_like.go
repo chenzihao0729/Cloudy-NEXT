@@ -24,7 +24,7 @@ var (
 // and then with NetEase, which may refuse: the heart goes back then. Signed
 // out, it asks the listener to sign in.
 func (a *app) toggleLike(tr *netease.Track) {
-	if tr.LocalPath != "" {
+	if tr.LocalPath != "" || tr.Source != nil {
 		return
 	}
 	if a.profile == nil {
@@ -160,7 +160,7 @@ func (a *app) likeButton(c *ui.Context, tr *netease.Track, size float32, color u
 
 func (a *app) heartButton(c *ui.Context, tr *netease.Track, size float32, color, likedColor ui.Color, outline, filled *ui.SVG) ui.Element {
 	// A file on disk has no heart at NetEase.
-	if tr.LocalPath != "" {
+	if tr.LocalPath != "" || tr.Source != nil {
 		return ui.Box(c).Size(size+16, size+16)
 	}
 	if tr.ProgramID != 0 {

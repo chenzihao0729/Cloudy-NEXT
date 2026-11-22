@@ -12,7 +12,11 @@ import (
 func TestBackAndForward(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.playlists[42] = &netease.Playlist{ID: 42, Name: "飙升榜", Tracks: []netease.Track{{ID: 1, Name: "一张相片"}}}
+	tracks := make([]netease.Track, 60)
+	for i := range tracks {
+		tracks[i] = netease.Track{ID: int64(i + 1), Name: "一张相片"}
+	}
+	a.playlists[42] = &netease.Playlist{ID: 42, Name: "飙升榜", Tracks: tracks}
 	tt := ui.NewTester(a.view, 1200, 800)
 	charts, list := route{page: pageCharts}, route{page: pagePlaylist, id: 42}
 	a.open(charts)
@@ -57,5 +61,36 @@ func TestBackAndForward(t *testing.T) {
 	tt.Frame()
 	if a.route != (route{page: pageHome}) {
 		t.Fatalf("forward after a new page went to %+v", a.route)
+	}
+}
+
+// Search lists must publish their actual viewport so artist navigation restores it on Back.
+func TestSearchArtistBackRestoresScroll(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	r := route{page: pageSearch, query: "测试", kind: netease.SearchSongs}
+	tracks := make([]netease.Track, 80)
+	for i := range tracks {
+		tracks[i] = netease.Track{ID: int64(i + 1), Name: "歌曲"}
+	}
+	a.searches[r] = &searchData{page: paged{loaded: true}, res: netease.SearchResult{Songs: tracks}}
+	a.qqArtists = map[string]*qqArtistData{"singer": {page: paged{loaded: true}, profileLoaded: true}}
+	a.open(r)
+	tt := ui.NewTester(a.view, 1200, 800)
+	tt.Frame()
+	a.trackList.ScrollTo(30, ui.Start)
+	tt.Frame()
+	tt.Frame()
+	y := a.pageScroll.Y
+	if y <= 0 {
+		t.Fatal("list did not publish its scroll position")
+	}
+	a.openPage(route{page: pageQQArtist, sourceID: "singer", query: "歌手"})
+	tt.Frame()
+	a.back()
+	tt.Frame()
+	tt.Frame()
+	if a.route != r || a.pageScroll.Y != y {
+		t.Fatalf("restored %v, want %v", a.pageScroll.Y, y)
 	}
 }

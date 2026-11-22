@@ -1,6 +1,7 @@
 package netease
 
 import (
+	"context"
 	"net/url"
 	"strconv"
 )
@@ -36,6 +37,11 @@ func (r *SearchResult) Len() int {
 
 // SearchPage returns limit of what matches a query, of a type, from offset.
 func SearchPage(query string, kind SearchType, limit, offset int) (SearchResult, error) {
+	return SearchPageContext(context.Background(), query, kind, limit, offset)
+}
+
+// SearchPageContext lets aggregate searches cancel obsolete catalog requests.
+func SearchPageContext(ctx context.Context, query string, kind SearchType, limit, offset int) (SearchResult, error) {
 	var res struct {
 		Result struct {
 			Songs         []Track         `json:"songs"`
@@ -53,7 +59,7 @@ func SearchPage(query string, kind SearchType, limit, offset int) (SearchResult,
 		} `json:"result"`
 	}
 	q := url.Values{"s": {query}, "type": {strconv.Itoa(int(kind))}, "limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}, "total": {"true"}}
-	if err := get("/api/cloudsearch/pc", q, &res); err != nil {
+	if err := getContext(ctx, "/api/cloudsearch/pc", q, &res); err != nil {
 		return SearchResult{}, err
 	}
 	r := res.Result

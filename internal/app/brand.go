@@ -36,8 +36,9 @@ var (
 	mascot    = embeddedBitmap(mascotPNG)
 	appIcon   = embeddedBitmap(resources.Icon)
 	brandIcon = appIcon
+	roundIcon = embeddedBitmap(resources.RoundIcon)
 	splashArt = sync.OnceValue(func() *ui.Bitmap {
-		src, _, err := image.Decode(bytes.NewReader(resources.Icon))
+		src, _, err := image.Decode(bytes.NewReader(resources.RoundIcon))
 		if err != nil {
 			return mascot()
 		}
@@ -58,15 +59,15 @@ func mascotView(c *ui.Context, size float32) ui.Element {
 	return ui.Image(c, mascot()).Size(size, size).Fit(ui.Cover)
 }
 
-func (a *app) aboutCard(k *settingsKit) {
-	c, ink := k.c, k.ink
+func (a *app) aboutCard(c *ui.Context, k *settingsKit) {
+	ink := k.ink
 	ui.Row(c).Padding(16, 20).Gap(14).AlignItems(ui.Center).Children(func() {
 		ui.Image(c, brandIcon()).Size(52, 52).Fit(ui.Cover).Shrink(0)
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(3).Children(func() {
 			ui.Text(c, mygo.App.Name()+" "+mygo.App.Version()).FontSize(14).FontWeight(700)
 			ui.Text(c, "Cloudy-NEXT 由 Zihao C 制作，基于 nya-owo/cloudy 修改，以AGPL-3.0开源。与网易云音乐官方无关").FontSize(12).TextColor(ink.muted).LineHeight(1.4)
 		})
-		if k.button("project", "项目", iconExternal, false, false).Clicked() {
+		if k.button(c, "project", "项目", iconExternal, false, false).Clicked() {
 			openLink(appProject)
 		}
 	})

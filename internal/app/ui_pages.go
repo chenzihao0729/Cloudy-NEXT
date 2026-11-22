@@ -505,13 +505,16 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 				}
 			})
 			if covers {
+				if tr.Album.PicURL == "" && a.route.page == pageSearch {
+					a.fillSearchCover(*tr)
+				}
 				grown := float32(1)
 				if hovered {
 					grown = 1.08
 				}
 				a.cover(c, tr.Album.PicURL, 96, 38, 8).AnimatePose(ui.Pose{Scale: grown}, ui.Snappy)
 			}
-			ui.Column(c).Grow(3).Basis(0).MinWidth(0).Gap(3).Children(func() {
+			ui.Column(c).Grow(3).Basis(0).MinWidth(0).Clip().Gap(3).Children(func() {
 				name := p.text
 				if playing {
 					name = p.accent
@@ -530,6 +533,11 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 					} else {
 						a.artistLinks(c, tr, p.muted, p.text).FontSize(12.5).SingleLine().Shrink(1).MinWidth(0)
 					}
+					if a.route.page == pageSearch || tr.Source != nil {
+						for _, ref := range searchTrackSources(*tr) {
+							ui.Text(c, ref.Platform).FontSize(9).FontWeight(700).Padding(1, 4).Radius(3).Shrink(0).TextColor(p.accent).Background(p.accent.Alpha(0.12)).Tooltip(platformName(ref.Platform))
+						}
+					}
 					if tr.Reason != "" {
 						ui.Text(c, tr.Reason).FontSize(10.5).FontWeight(600).TextColor(p.accent).Padding(1, 6).Radius(999).Background(p.accent.Alpha(0.1)).SingleLine()
 					}
@@ -543,32 +551,30 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 				if hovered {
 					shade = p.text.Alpha(0.85)
 				}
-				album := ui.RichText(c).Grow(2).Basis(0).MinWidth(0).FontSize(12.5).TextColor(shade).SingleLine()
-				album.Children(func() {
-					if batch || tr.Album.ID == 0 {
-						ui.Text(c, tr.Album.Name)
-					} else {
-						a.link(c.Key("album"), tr.Album.Name, shade, p.text, route{page: pageAlbum, id: tr.Album.ID})
+				album := ui.ButtonBase(c.Key("album")).Grow(2).Basis(0).MinWidth(0).Justify(ui.Start).FocusRing(false).Label(tr.Album.Name)
+				album.Children(func() { ui.Text(c, tr.Album.Name).FontSize(12.5).TextColor(shade).SingleLine() })
+				if !batch && album.Clicked() {
+					if tr.Album.ID > 0 {
+						a.openPage(route{page: pageAlbum, id: tr.Album.ID})
+					} else if tr.Source != nil {
+						openSourceAlbum(a, *tr)
 					}
-				})
+				}
 			}
 			// A liked song's heart shows; the others' as the pointer is on them.
-			if tr.LocalPath == "" && !batch {
+			if !batch {
 				ui.Box(c).Size(32, 32).Center().Children(func() {
-					if a.liked[tr.ID] || hovered {
+					if tr.LocalPath == "" && tr.Source == nil && (a.liked[tr.ID] || hovered) {
 						a.likeButton(c.Key("like"), tr, 15, p.muted)
 					}
 				})
 			}
 			ui.Text(c, clock(tr.Length())).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(44).TextAlign(ui.End)
 		})
-		if row.DoubleClicked() {
-			switch {
-			case batch:
-				a.toggleBatch(tr.ID)
-			case canPlay:
-				a.pl.PlayQueue(tracks, i)
-			}
+		if batch && row.Clicked() {
+			a.toggleBatch(tr.ID)
+		} else if !batch && row.DoubleClicked() && canPlay {
+			a.pl.PlayQueue(tracks, i)
 		}
 	}
 	// The header stays as the rows under it switch between the songs and
@@ -600,6 +606,8 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 	// Playing closed over it. A glide starts from where the list shows.
 	if a.listScroll.Scrolling() {
 		list.TrackScroll(&a.listScroll)
+	} else {
+		list.TrackScroll(&a.pageScroll)
 	}
 	a.listBox = list.LayoutBounds()
 	a.listFloats(c, listBottom, grid)

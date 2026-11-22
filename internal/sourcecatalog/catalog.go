@@ -18,15 +18,30 @@ import (
 )
 
 type Song struct {
-	ID       string
-	MID      string
-	MediaMID string
-	Hash     string
-	Name     string
-	Artists  []string
-	Album    string
-	Duration time.Duration
-	CoverURL string
+	AlbumMID   string
+	IsCover    bool
+	LyricURL   string
+	ID         string
+	MID        string
+	MediaMID   string
+	Hash       string
+	Name       string
+	ArtistMIDs []string
+	Artists    []string
+	Album      string
+	Duration   time.Duration
+	CoverURL   string
+}
+
+type pageKey struct{}
+
+// SearchPage searches a provider page while fallback matching keeps using page one.
+func SearchPage(ctx context.Context, platform, query string, limit, page int) ([]Song, error) {
+	return Search(context.WithValue(ctx, pageKey{}, max(1, page)), platform, query, limit)
+}
+func searchPage(ctx context.Context) int {
+	page, _ := ctx.Value(pageKey{}).(int)
+	return max(1, page)
 }
 
 type Searcher interface {
@@ -110,13 +125,13 @@ func Match(track netease.Track, songs []Song) (Song, bool) {
 type qqSearcher struct{}
 
 func (qqSearcher) Search(ctx context.Context, query string, limit int) ([]Song, error) {
-	rows, err := qqmusic.Search(ctx, query, limit)
+	rows, err := qqmusic.SearchPage(ctx, query, limit, searchPage(ctx))
 	if err != nil {
 		return nil, err
 	}
 	out := make([]Song, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, Song{ID: row.MID, MID: row.MID, MediaMID: row.MediaMID, Name: row.Name, Artists: row.Artists, Album: row.Album, Duration: row.Duration, CoverURL: row.CoverURL})
+		out = append(out, Song{AlbumMID: row.AlbumMID, ID: row.MID, MID: row.MID, MediaMID: row.MediaMID, Name: row.Name, Artists: row.Artists, ArtistMIDs: row.ArtistMIDs, Album: row.Album, Duration: row.Duration, CoverURL: row.CoverURL})
 	}
 	return out, nil
 }
@@ -125,7 +140,7 @@ type kugouSearcher struct{}
 
 func (kugouSearcher) Search(ctx context.Context, query string, limit int) ([]Song, error) {
 	// Kugou's old search endpoint requires a signature; this public mobile endpoint does not.
-	values := url.Values{"format": {"json"}, "keyword": {query}, "page": {"1"}, "pagesize": {strconv.Itoa(limit)}, "showtype": {"1"}}
+	values := url.Values{"format": {"json"}, "keyword": {query}, "page": {strconv.Itoa(searchPage(ctx))}, "pagesize": {strconv.Itoa(limit)}, "showtype": {"1"}}
 	var payload struct {
 		Status int `json:"status"`
 		Data   struct {
@@ -166,7 +181,7 @@ func (kugouSearcher) Search(ctx context.Context, query string, limit int) ([]Son
 type kuwoSearcher struct{}
 
 func (kuwoSearcher) Search(ctx context.Context, query string, limit int) ([]Song, error) {
-	values := url.Values{"key": {query}, "pn": {"1"}, "rn": {strconv.Itoa(limit)}, "httpsStatus": {"1"}}
+	values := url.Values{"key": {query}, "pn": {strconv.Itoa(searchPage(ctx))}, "rn": {strconv.Itoa(limit)}, "httpsStatus": {"1"}}
 	var payload struct {
 		Code string `json:"code"`
 		Data struct {
@@ -185,7 +200,7 @@ func (kuwoSearcher) Search(ctx context.Context, query string, limit int) ([]Song
 		return nil, err
 	}
 	if payload.Code != "200" {
-		return nil, fmt.Errorf("kuwo search: code %s", payload.Code)
+		return searchKuwoLegacy(ctx, query, limit)
 	}
 	out := make([]Song, 0, len(payload.Data.List))
 	for _, row := range payload.Data.List {
@@ -193,7 +208,7 @@ func (kuwoSearcher) Search(ctx context.Context, query string, limit int) ([]Song
 		if id == "" || row.Name == "" {
 			continue
 		}
-		out = append(out, Song{ID: id, Name: row.Name, Artists: splitArtists(row.Artist), Album: row.Album, Duration: parseDuration(row.Duration)})
+		out = append(out, Song{ID: id, Name: row.Name, Artists: splitArtists(row.Artist), Album: row.Album, Duration: parseDuration(row.Duration), CoverURL: row.AlbumID})
 	}
 	return out, nil
 }
@@ -201,35 +216,7 @@ func (kuwoSearcher) Search(ctx context.Context, query string, limit int) ([]Song
 type miguSearcher struct{}
 
 func (miguSearcher) Search(ctx context.Context, query string, limit int) ([]Song, error) {
-	values := url.Values{"keyword": {query}, "type": {"2"}, "rows": {strconv.Itoa(limit)}, "page": {"1"}}
-	var payload struct {
-		Code       string `json:"code"`
-		SongResult struct {
-			Songs []struct {
-				ID       string `json:"copyrightId"`
-				Name     string `json:"songName"`
-				Artist   string `json:"singerName"`
-				Album    string `json:"albumName"`
-				Duration string `json:"songTime"`
-				Cover    string `json:"cover"`
-			} `json:"items"`
-		} `json:"songResultData"`
-	}
-	err := getJSON(ctx, "https://music.migu.cn/v3/api/search?"+values.Encode(), "https://music.migu.cn/", &payload)
-	if err != nil {
-		return nil, err
-	}
-	if payload.Code != "000000" && payload.Code != "200" {
-		return nil, fmt.Errorf("migu search: code %s", payload.Code)
-	}
-	out := make([]Song, 0, len(payload.SongResult.Songs))
-	for _, row := range payload.SongResult.Songs {
-		if row.ID == "" || row.Name == "" {
-			continue
-		}
-		out = append(out, Song{ID: row.ID, Name: row.Name, Artists: splitArtists(row.Artist), Album: row.Album, Duration: parseDuration(row.Duration), CoverURL: row.Cover})
-	}
-	return out, nil
+	return searchMiguApp(ctx, query, limit)
 }
 
 type qishuiSearcher struct{}
@@ -284,8 +271,17 @@ func rawID(value json.RawMessage) string {
 func parseDuration(value string) time.Duration {
 	seconds, _ := strconv.Atoi(strings.TrimSpace(value))
 	if seconds == 0 {
-		if parsed, err := time.Parse("04:05", value); err == nil {
-			return parsed.Sub(time.Time{})
+		parts := strings.Split(value, ":")
+		if len(parts) == 2 || len(parts) == 3 {
+			total := 0
+			for _, part := range parts {
+				n, err := strconv.Atoi(part)
+				if err != nil || n < 0 {
+					return 0
+				}
+				total = total*60 + n
+			}
+			return time.Duration(total) * time.Second
 		}
 	}
 	return time.Duration(seconds) * time.Second

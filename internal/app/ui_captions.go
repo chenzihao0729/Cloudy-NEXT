@@ -133,8 +133,8 @@ func megabytes(n int64) string {
 }
 
 // captionSettings are the settings' rows for captions.
-func (a *app) captionSettings(k *settingsKit) {
-	c, row := k.c, k.row
+func (a *app) captionSettings(c *ui.Context, k *settingsKit) {
+	row := func(label, desc string, control func()) { k.row(c, label, desc, control) }
 	m := &a.captions.model
 	s := &a.settings
 	row("播客字幕", "播放节目时在本机转写语音，生成可滚动的字幕；转写时会多用一些电量", func() {
@@ -155,15 +155,15 @@ func (a *app) captionSettings(k *settingsKit) {
 	row("语音识别模型", desc, func() {
 		switch {
 		case m.downloading:
-			if k.button("model", "取消", nil, false, false).Clicked() {
+			if k.button(c, "model", "取消", nil, false, false).Clicked() {
 				a.cancelModelDownload()
 			}
 		case a.modelReady():
-			if k.button("model", "删除", nil, false, true).Clicked() {
+			if k.button(c, "model", "删除", nil, false, true).Clicked() {
 				a.deleteModel()
 			}
 		default:
-			if k.button("model", "下载", iconDownload, false, false).Clicked() {
+			if k.button(c, "model", "下载", iconDownload, false, false).Clicked() {
 				a.startModelDownload()
 			}
 		}

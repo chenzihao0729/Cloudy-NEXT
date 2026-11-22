@@ -59,7 +59,7 @@ func (a *app) downloadAll(tracks []netease.Track) {
 	a.loadDownloads(false)
 	queued, skipped := 0, 0
 	for _, tr := range tracks {
-		if tr.LocalPath != "" || tr.ProgramID != 0 || !tr.Playable() || a.downloaded(tr.ID) || a.downloadPending(tr.ID) {
+		if tr.Source != nil || tr.LocalPath != "" || tr.ProgramID != 0 || !tr.Playable() || a.downloaded(tr.ID) || a.downloadPending(tr.ID) {
 			skipped++
 			continue
 		}
@@ -172,7 +172,7 @@ func (a *app) addAllToQueue(tracks []netease.Track) {
 	var add []netease.Track
 	skipped := 0
 	for _, tr := range tracks {
-		if tr.Playable() && tr.LocalPath == "" && tr.ProgramID == 0 {
+		if tr.Source == nil && tr.Playable() && tr.LocalPath == "" && tr.ProgramID == 0 {
 			add = append(add, tr)
 		} else {
 			skipped++

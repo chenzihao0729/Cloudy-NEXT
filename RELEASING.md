@@ -9,7 +9,7 @@ Cloudy is released from `nya-owo/cloudy`, the remote called `fork` in the local 
    git worktree add -b claude/<work> ../wt-<work> fork/main
    ```
 
-   Commit the work there, and run `go vet ./internal/...` and `go test ./internal/...`. The Test workflow runs the same on every push to main.
+   Commit the work there, and run `go vet ./internal/...` and `go test -timeout 40m ./internal/...`. UI raster tests can exceed Go's default ten-minute timeout; this matches the Test workflow on every push to main.
 
 2. Bump `version` in `mygo.json`, and add a `## 1.2.7` section at the top of `CHANGELOG.md` saying, in Chinese, what changed for people using the app since the last release (`git log v1.2.6..HEAD`). Commit both in a commit titled just the version, e.g. `1.2.7`. MyGo's updater shows that section in the app's update window, and the release page takes it as its notes; the release fails without one.
 

@@ -315,7 +315,7 @@ func (a *app) miniCover(c *ui.Context, tr *netease.Track, size float32, square b
 		switch {
 		case tr == nil:
 			ui.Box(c).Size(size, size).Radius(999).Center().Background(white.Alpha(0.08)).Children(func() {
-				ui.Image(c, brandIcon()).Size(size*0.72, size*0.72).Fit(ui.Cover)
+				ui.Image(c, roundIcon()).Size(size*0.72, size*0.72).Fit(ui.Cover)
 			})
 		case square:
 			ui.Box(c).Size(size, size).Radius(14).Shadow(0, 8, 24, -6, ui.RGBA(0, 0, 0, 0.45)).Children(func() {

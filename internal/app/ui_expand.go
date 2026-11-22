@@ -305,6 +305,11 @@ func (a *app) dialog(c *ui.Context, key string, dim float32, open *bool, fn func
 			}
 		}
 	})
+	// Settings is a modal workspace: clicking the dimmed area must not close
+	// it, so the only exit is its explicit close button.
+	if key == "settings" {
+		shown = true
+	}
 	if !shown {
 		*open = false
 	}

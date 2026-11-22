@@ -207,12 +207,11 @@ func (a *app) tickTimes(c *ui.Context) {
 // volumeButton is the speaker, which opens the volume in a popover above
 // it, as an AppKit popover: a native slider standing up, the volume in
 // percent over it. It opens as the pointer comes over the speaker, which
-// shows that the wheel there turns it, and closes a moment after the
-// pointer has left both; a click keeps it open until a click elsewhere.
+// shows that the wheel there turns it, and closes immediately after the
+// pointer has left both.
 func (a *app) volumeButton(c *ui.Context, color ui.Color, size float32) {
 	b := iconButton(c.Key("volume-button"), volumeIcon(a.volume), size, color, "音量")
 	h := &a.volumeHover
-	now := c.Now()
 	if b.Clicked() {
 		// A click mutes, and another brings the volume back; the slider
 		// opens under the pointer.
@@ -226,11 +225,11 @@ func (a *app) volumeButton(c *ui.Context, color ui.Color, size float32) {
 	pop := popoverColors(a.pal.dark)
 	ui.PopoverBase(c.Key("volume-popover"), b, &a.volumeOpen, func(panel ui.Element) {
 		if panel.Hovered() {
-			h.at = c.Now()
+			over = true
 		}
 		const arrow = 7
 		a.pane(panel, 26, false)
-		panel.AttachTo(b, ui.AnchorTop, ui.AnchorBottom).Margin(0, 0, arrow+3, 0).Width(52).Padding(11, 0, 12, 0).
+		panel.AttachTo(b, ui.AnchorTop, ui.AnchorBottom).Width(52).Padding(11, 0, 12, 0).
 			AlignItems(ui.Center).Gap(8).Label("音量").TransformOrigin(0.5, 1)
 		a.paneMotion(panel)
 		// Of glass, there is no arrow: what shows through would stop at it.
@@ -253,31 +252,15 @@ func (a *app) volumeButton(c *ui.Context, color ui.Color, size float32) {
 		ui.Textf(c, "%d%%", int(a.volume*100+0.5)).FontSize(11).FontWeight(500).FontFeatures("tnum").TextColor(a.pal.muted)
 		a.nativeVolumeSlider(c, pop)
 	})
-	// Opened by the pointer, it closes a moment after the pointer left the
-	// speaker and the popover both, which the panel says as it is built.
-	if over {
-		h.at = now
-	}
-	if a.volumeOpen && h.byHover {
-		if left := now.Sub(h.at); left >= volumeLinger {
-			a.volumeOpen, h.byHover = false, false
-		} else {
-			c.After(volumeLinger - left)
-		}
+	if a.volumeOpen && h.byHover && !over {
+		a.volumeOpen, h.byHover = false, false
 	}
 }
 
-// hoverOpen is how a popover the pointer opens stays open: whether the
-// pointer opened it rather than a click, and when the pointer was last
-// over it or what opened it.
+// hoverOpen records whether the pointer opened a popover.
 type hoverOpen struct {
 	byHover bool
-	at      time.Time
 }
-
-// volumeLinger is how long the volume stays after the pointer left it, for
-// a pointer passing from the speaker up to the slider, or out a moment.
-const volumeLinger = 350 * time.Millisecond
 
 // popover holds the colors of a popover as AppKit draws them.
 type popover struct {
@@ -414,7 +397,7 @@ func (a *app) transport(c *ui.Context, color, dim, on ui.Color, size float32) {
 // play mode (noMode): it moves to the details menu then, instead of
 // squeezing the song's title. A compact bar keeps it: listeners missed
 // 单曲循环 most of what a compact bar puts away.
-func (a *app) transportRow(c *ui.Context, color, dim, on ui.Color, size float32, noMode bool) {
+func (a *app) transportRow(c *ui.Context, color, dim, on ui.Color, size float32, noMode bool, trailing ...func()) {
 	pl := a.pl
 	ui.Row(c).Gap(size * 0.5).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 		// One button goes through the modes, lit but in order.
@@ -424,7 +407,7 @@ func (a *app) transportRow(c *ui.Context, color, dim, on ui.Color, size float32,
 			tint = dim
 		}
 		if !noMode {
-			if iconButton(c.Key("mode"), modeIcon(mode), size*0.62, tint, mode.Name()).Clicked() {
+			if iconButton(c.Key("mode"), modeIcon(mode), size*0.62, tint, mode.Name()).Tooltip(mode.Name()).Clicked() {
 				a.say("mode", pl.CycleMode().Name())
 			}
 		}
@@ -444,7 +427,11 @@ func (a *app) transportRow(c *ui.Context, color, dim, on ui.Color, size float32,
 		}
 		// As wide as the mode's button, for play to stay in the middle.
 		if !noMode {
-			ui.Box(c).Width(size*0.62 + 16).Height(1)
+			if len(trailing) > 0 {
+				ui.Box(c).Size(size*0.62+16, size*0.62+16).Center().Children(trailing[0])
+			} else {
+				ui.Box(c).Width(size*0.62 + 16).Height(1)
+			}
 		}
 	})
 }
@@ -565,7 +552,7 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 			if tr == nil {
 				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 					ui.Box(c).Size(48, 48).Radius(cover).Background(p.hover).Center().Children(func() {
-						ui.Icon(c, iconNote).Size(18, 18).TextColor(faint)
+						ui.Image(c, roundIcon()).Size(48, 48).Fit(ui.Cover)
 					})
 					ui.Text(c, "未在播放").FontSize(13).TextColor(muted)
 				})

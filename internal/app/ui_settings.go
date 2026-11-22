@@ -245,7 +245,6 @@ func (a *app) settingsNavItems(c *ui.Context, ink paneInk, searching bool) {
 // nothing.
 type settingsKit struct {
 	a     *app
-	c     *ui.Context
 	ink   paneInk
 	query string // what is searched, lowered; empty while not searching
 	// searching is whether the listener searches, while a group whose
@@ -295,7 +294,7 @@ func (k *settingsKit) count(rows func()) int {
 
 // group is a titled card of rows. A search matching its title shows all of
 // them.
-func (k *settingsKit) group(title string, rows func()) {
+func (k *settingsKit) group(c *ui.Context, title string, rows func()) {
 	q := k.query
 	defer func() { k.query = q }()
 	if q != "" && k.match(title) {
@@ -316,8 +315,8 @@ func (k *settingsKit) group(title string, rows func()) {
 	if k.plain {
 		top = 24
 	}
-	ui.Text(k.c, title).FontSize(12.5).FontWeight(600).TextColor(k.ink.muted).Margin(top, 0, 8, 16)
-	k.card(rows)
+	ui.Text(c, title).FontSize(12.5).FontWeight(600).TextColor(k.ink.muted).Margin(top, 0, 8, 16)
+	k.card(c, rows)
 }
 
 // cardColors are the fill and edge of a card on the settings' pane.
@@ -328,11 +327,11 @@ func (a *app) cardColors() (fill, edge ui.Color) {
 	return white.Alpha(0.6), ui.RGBA(0, 0, 0, 0.07)
 }
 
-func (k *settingsKit) card(rows func()) {
+func (k *settingsKit) card(c *ui.Context, rows func()) {
 	n := k.rows
 	k.rows = 0
 	fill, edge := k.a.cardColors()
-	card := ui.Column(k.c).Background(fill)
+	card := ui.Column(c).Background(fill)
 	if k.plain {
 		card.Radius(14)
 	} else {
@@ -345,32 +344,32 @@ func (k *settingsKit) card(rows func()) {
 // foot says under the card above it what its rows leave unsaid: a line
 // or two for all of them. Not while searching, where each row says its
 // own.
-func (k *settingsKit) foot(text string) {
+func (k *settingsKit) foot(c *ui.Context, text string) {
 	if k.probe || k.searching || !k.plain {
 		return
 	}
-	ui.Text(k.c, text).FontSize(12).LineHeight(1.45).TextColor(k.ink.muted.Alpha(0.85)).Margin(8, 16, 0, 16)
+	ui.Text(c, text).FontSize(12).LineHeight(1.45).TextColor(k.ink.muted.Alpha(0.85)).Margin(8, 16, 0, 16)
 }
 
 // stateRow is a row whose desc says how things stand, not what it is.
-func (k *settingsKit) stateRow(label, desc string, control func()) {
-	k.rowOf(settingRow{label: label, desc: desc, keep: true}, control)
+func (k *settingsKit) stateRow(c *ui.Context, label, desc string, control func()) {
+	k.rowOf(c, settingRow{label: label, desc: desc, keep: true}, control)
 }
 
 // row is a setting and its control.
-func (k *settingsKit) row(label, desc string, control func()) {
-	k.rowOf(settingRow{label: label, desc: desc}, control)
+func (k *settingsKit) row(c *ui.Context, label, desc string, control func()) {
+	k.rowOf(c, settingRow{label: label, desc: desc}, control)
 }
 
 // sub is a setting of the one above it, shown while that one is on.
-func (k *settingsKit) sub(label, desc string, on bool, control func()) {
+func (k *settingsKit) sub(c *ui.Context, label, desc string, on bool, control func()) {
 	if !on && !k.searching {
 		return
 	}
-	k.rowOf(settingRow{label: label, desc: desc, sub: true}, control)
+	k.rowOf(c, settingRow{label: label, desc: desc, sub: true}, control)
 }
 
-func (k *settingsKit) rowOf(r settingRow, control func()) {
+func (k *settingsKit) rowOf(c *ui.Context, r settingRow, control func()) {
 	if !k.match(r.label, r.desc, r.tip) {
 		return
 	}
@@ -378,7 +377,7 @@ func (k *settingsKit) rowOf(r settingRow, control func()) {
 		k.hits++
 		return
 	}
-	c, ink := k.c, k.ink
+	ink := k.ink
 	first := k.rows == 0
 	k.rows++
 	left := float32(20)
@@ -388,7 +387,7 @@ func (k *settingsKit) rowOf(r settingRow, control func()) {
 	line := ink.line.Alpha(0.75)
 	sub := r.sub
 	if k.plain {
-		k.plainRow(r, first, control)
+		k.plainRow(c, r, first, control)
 		return
 	}
 	ui.Row(c).Padding(11, 20, 11, left).Gap(20).AlignItems(ui.Center).MinHeight(62).
@@ -432,8 +431,8 @@ func (k *settingsKit) rowOf(r settingRow, control func()) {
 // control at the end of the line; under its name what it has to say
 // only if that is a caution or how things stand, or while searching,
 // where it may be what was found.
-func (k *settingsKit) plainRow(r settingRow, first bool, control func()) {
-	c, ink := k.c, k.ink
+func (k *settingsKit) plainRow(c *ui.Context, r settingRow, first bool, control func()) {
+	ink := k.ink
 	line := ink.line.Alpha(0.75)
 	said := r.desc != "" && (r.warn || r.keep || k.searching)
 	ui.Row(c).Padding(6, 14, 6, 16).Gap(16).AlignItems(ui.Center).MinHeight(46).
@@ -483,7 +482,7 @@ func infoTip(c *ui.Context, tip string, ink paneInk) {
 }
 
 // block is a part of a card that is not a row, found by words.
-func (k *settingsKit) block(words string, fn func()) {
+func (k *settingsKit) block(c *ui.Context, words string, fn func()) {
 	if !k.match(words) {
 		return
 	}
@@ -497,8 +496,8 @@ func (k *settingsKit) block(words string, fn func()) {
 
 // button is a button of the settings: a capsule as the app's others are,
 // red when it deletes what it names.
-func (k *settingsKit) button(key any, label string, icon *ui.SVG, disabled, danger bool) ui.Element {
-	return settingButton(k.c.Key(key), k.ink, label, icon, disabled, danger)
+func (k *settingsKit) button(c *ui.Context, key any, label string, icon *ui.SVG, disabled, danger bool) ui.Element {
+	return settingButton(c.Key(key), k.ink, label, icon, disabled, danger)
 }
 
 func settingButton(c *ui.Context, ink paneInk, label string, icon *ui.SVG, disabled, danger bool) ui.Element {
@@ -531,8 +530,8 @@ func settingButton(c *ui.Context, ink paneInk, label string, icon *ui.SVG, disab
 
 // choose is a select of a setting among labels, calling pick with the one
 // chosen.
-func (k *settingsKit) choose(key, label, chosen string, labels []string, pick func(i int)) {
-	if k.a.paneSelect(k.c.Key(key), label, &chosen, labels) {
+func (k *settingsKit) choose(c *ui.Context, key, label, chosen string, labels []string, pick func(i int)) {
+	if k.a.paneSelect(c.Key(key), label, &chosen, labels) {
 		for i, l := range labels {
 			if l == chosen {
 				pick(i)
@@ -542,8 +541,8 @@ func (k *settingsKit) choose(key, label, chosen string, labels []string, pick fu
 }
 
 // toggle is the switch of a setting, calling then as it changes.
-func (k *settingsKit) toggle(key, label string, on *bool, disabled bool, then func()) {
-	if settingSwitch(k.c.Key(key), on).Label(label).Disabled(disabled).Changed() {
+func (k *settingsKit) toggle(c *ui.Context, key, label string, on *bool, disabled bool, then func()) {
+	if settingSwitch(c.Key(key), on).Label(label).Disabled(disabled).Changed() {
 		if then != nil {
 			then()
 		}
@@ -554,7 +553,7 @@ func (k *settingsKit) toggle(key, label string, on *bool, disabled bool, then fu
 // settingsBody shows one category, keeping its scroll position between
 // visits, or while the listener searches, what matches in all of them.
 func (a *app) settingsBody(c *ui.Context) {
-	k := &settingsKit{a: a, c: c, ink: a.inkOn(false), plain: true, query: strings.ToLower(strings.TrimSpace(a.settingsView.query))}
+	k := &settingsKit{a: a, ink: a.inkOn(false), plain: true, query: strings.ToLower(strings.TrimSpace(a.settingsView.query))}
 	k.searching = k.query != ""
 	key, scroll, label := any(a.settingsView.tab), &a.settingsView.scroll[a.settingsView.tab], settingsCategories[a.settingsView.tab].label
 	if k.query != "" {
@@ -572,14 +571,14 @@ func (a *app) settingsBody(c *ui.Context) {
 				ui.Column(c.Key(a.settingsView.tab)).Children(func() {
 					ui.Text(c, cat.label).FontSize(26).FontWeight(700).Margin(0, 40, 0, 4)
 					ui.Text(c, cat.blurb).FontSize(13).TextColor(k.ink.muted).Margin(6, 40, 0, 4)
-					a.settingsPage(k, a.settingsView.tab)
+					a.settingsPage(c, k, a.settingsView.tab)
 				})
 				return
 			}
 			ui.Text(c, "搜索结果").FontSize(26).FontWeight(700).Margin(0, 40, 0, 4)
 			found := false
 			for cat := settingsCategory(0); cat < settingsCategoryCount; cat++ {
-				if k.count(func() { a.settingsPage(k, cat) }) == 0 {
+				if k.count(func() { a.settingsPage(c, k, cat) }) == 0 {
 					continue
 				}
 				found = true
@@ -590,7 +589,7 @@ func (a *app) settingsBody(c *ui.Context) {
 						})
 						ui.Text(c, settingsCategories[cat].label).FontSize(16).FontWeight(700)
 					})
-					a.settingsPage(k, cat)
+					a.settingsPage(c, k, cat)
 				})
 			}
 			if !found {
@@ -604,40 +603,40 @@ func (a *app) settingsBody(c *ui.Context) {
 }
 
 // settingsPage is the groups of a category.
-func (a *app) settingsPage(k *settingsKit, category settingsCategory) {
+func (a *app) settingsPage(c *ui.Context, k *settingsKit, category settingsCategory) {
 	switch category {
 	case settingsAccount:
-		a.settingsAccountPage(k)
+		a.settingsAccountPage(c, k)
 	case settingsPlayback:
-		a.settingsPlaybackPage(k)
-		k.group("播客", func() {
-			a.podcastSpeedRow(k.c, k.row)
+		a.settingsPlaybackPage(c, k)
+		k.group(c, "播客", func() {
+			a.podcastSpeedRow(c, func(label, desc string, control func()) { k.row(c, label, desc, control) })
 			if a.captionsShown() {
-				a.captionSettings(k)
+				a.captionSettings(c, k)
 			}
 		})
 	case settingsNowPlaying:
-		a.settingsNowPlayingPage(k)
+		a.settingsNowPlayingPage(c, k)
 	case settingsLyrics:
-		a.settingsLyricsPage(k)
+		a.settingsLyricsPage(c, k)
 	case settingsAppearance:
-		a.settingsAppearancePage(k)
+		a.settingsAppearancePage(c, k)
 	case settingsHome:
-		a.settingsHomePage(k)
+		a.settingsHomePage(c, k)
 	case settingsStorage:
-		a.settingsStoragePage(k)
+		a.settingsStoragePage(c, k)
 	case settingsSystem:
-		a.settingsSystemPage(k)
+		a.settingsSystemPage(c, k)
 	case settingsAbout:
-		a.settingsAboutPage(k)
+		a.settingsAboutPage(c, k)
 	}
 }
 
-func (a *app) settingsAccountPage(k *settingsKit) {
-	c, ink, s := k.c, k.ink, &a.settings
-	k.group("网易云账号", func() {
+func (a *app) settingsAccountPage(c *ui.Context, k *settingsKit) {
+	ink, s := k.ink, &a.settings
+	k.group(c, "网易云账号", func() {
 		if a.profile == nil {
-			k.stateRow("未登录", "登录后，每日推荐与歌单将根据你的口味生成", func() {
+			k.stateRow(c, "未登录", "登录后，每日推荐与歌单将根据你的口味生成", func() {
 				if ui.PrimaryButton(c.Key("login"), "扫码登录").Clicked() {
 					a.settingsView.open = false
 					a.openLogin()
@@ -646,61 +645,61 @@ func (a *app) settingsAccountPage(k *settingsKit) {
 			return
 		}
 		prof := a.profile
-		k.block("账号 登录 头像 昵称 退出登录 "+prof.Nickname, func() {
+		k.block(c, "账号 登录 头像 昵称 退出登录 "+prof.Nickname, func() {
 			ui.Row(c).Padding(16, 20).Gap(14).AlignItems(ui.Center).Children(func() {
 				a.avatar(c, prof.AvatarURL, 52, ink.press)
 				ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
 					ui.Text(c, prof.Nickname).FontSize(16).FontWeight(700).SingleLine()
 					ui.Text(c, "已登录网易云音乐").FontSize(12.5).TextColor(ink.muted)
 				})
-				if k.button("logout", "退出登录", iconSignOut, false, true).Clicked() {
+				if k.button(c, "logout", "退出登录", iconSignOut, false, true).Clicked() {
 					a.askSignOut()
 				}
 			})
 		})
 	})
-	k.group("听歌记录", func() {
+	k.group(c, "听歌记录", func() {
 		if !scrobbleWorks {
 			// Shown, but not to be turned on, while NetEase counts none of
 			// the plays told it: off whatever 1.2.0 kept.
-			k.rowOf(settingRow{label: "计入网易云听歌记录", badge: "未开放", desc: "网易云目前不会计入第三方客户端发来的听歌记录，修好后再开放",
+			k.rowOf(c, settingRow{label: "计入网易云听歌记录", badge: "未开放", desc: "网易云目前不会计入第三方客户端发来的听歌记录，修好后再开放",
 				tip: "把听完或听满 30 秒的歌计入账号的听歌时长和排行"}, func() {
 				off := false
 				settingSwitch(c.Key("scrobble"), &off).Label("计入网易云听歌记录（未开放）").Disabled(true)
 			})
 			return
 		}
-		k.rowOf(settingRow{label: "计入网易云听歌记录", desc: "以网易云 Mac 客户端的身份上报，理论上有账号风险，社区暂无封号案例",
+		k.rowOf(c, settingRow{label: "计入网易云听歌记录", desc: "以网易云 Mac 客户端的身份上报，理论上有账号风险，社区暂无封号案例",
 			tip: "听完或听满 30 秒的歌会计入最近播放、听歌排行和累计听歌，网易云几分钟后才显示。这是网易云未公开的接口，以官方 Mac 客户端的身份发送：理论上存在账号风险，目前社区里还没有因此被封号的案例；网易云也可能随时不再计入。默认关闭", warn: true}, func() {
-			k.toggle("scrobble", "计入网易云听歌记录", &s.Scrobble, a.profile == nil, nil)
+			k.toggle(c, "scrobble", "计入网易云听歌记录", &s.Scrobble, a.profile == nil, nil)
 		})
 	})
 }
 
-func (a *app) settingsPlaybackPage(k *settingsKit) {
-	c, s := k.c, &a.settings
-	k.group("播放源", func() {
-		k.stateRow("音源插件", a.sourcePluginLabel(), func() {
-			if k.button("source-plugin-test", "测试解析", iconPlay, a.source == nil || !a.source.hasPlugin(), false).Clicked() {
+func (a *app) settingsPlaybackPage(c *ui.Context, k *settingsKit) {
+	s := &a.settings
+	k.group(c, "播放源", func() {
+		k.stateRow(c, "音源插件", a.sourcePluginLabel(), func() {
+			if k.button(c, "source-plugin-test", "测试解析", iconPlay, a.source == nil || !a.source.hasPlugin(), false).Clicked() {
 				a.testSourcePlugin()
 			}
-			if k.button("source-plugin-import", "添加插件", iconPlus, false, false).Clicked() {
+			if k.button(c, "source-plugin-import", "添加插件", iconPlus, false, false).Clicked() {
 				a.importSourcePlugin()
 			}
-			if k.button("source-plugin-logs", "运行日志", iconHistory, false, false).Clicked() {
+			if k.button(c, "source-plugin-logs", "运行日志", iconHistory, false, false).Clicked() {
 				a.settingsView.sourceLogs = true
 			}
 		})
-		k.row("启用播放源", "未登录或账号无会员时用插件播放 VIP 歌曲；有会员时使用网易云", func() {
-			k.toggle("qq-fallback", "启用播放源", &s.QQFallback, a.source == nil || !a.source.hasPlugin(), func() {
+		k.row(c, "启用播放源", "未登录或账号无会员时用插件播放 VIP 歌曲；有会员时使用网易云", func() {
+			k.toggle(c, "qq-fallback", "启用播放源", &s.QQFallback, a.source == nil || !a.source.hasPlugin(), func() {
 				if a.source != nil {
 					a.source.setEnabled(s.QQFallback)
 				}
 			})
 		})
 	})
-	k.group("音质", func() {
-		k.rowOf(settingRow{label: "播放音质", desc: "无损与 Hi-Res 需要黑胶 VIP，下一首开始生效",
+	k.group(c, "音质", func() {
+		k.rowOf(c, settingRow{label: "播放音质", desc: "无损与 Hi-Res 需要黑胶 VIP，下一首开始生效",
 			tip: "没有黑胶 VIP 时，播放所能播放的最高音质"}, func() {
 			labels := make([]string, len(qualityLevels))
 			chosen := qualityLevels[2].label
@@ -710,21 +709,21 @@ func (a *app) settingsPlaybackPage(k *settingsKit) {
 					chosen = q.label
 				}
 			}
-			k.choose("quality", "播放音质", chosen, labels, func(i int) {
+			k.choose(c, "quality", "播放音质", chosen, labels, func(i int) {
 				s.Quality = qualityLevels[i].level
 				a.changed()
 			})
 		})
 	})
-	k.group("声音", func() {
-		k.row("音量均衡", "按网易云测得的响度调整音量，让每首歌听起来一样响", func() {
-			k.toggle("normalize", "音量均衡", &s.Normalize, false, func() { a.pl.SetVolume(a.volume) })
+	k.group(c, "声音", func() {
+		k.row(c, "音量均衡", "按网易云测得的响度调整音量，让每首歌听起来一样响", func() {
+			k.toggle(c, "normalize", "音量均衡", &s.Normalize, false, func() { a.pl.SetVolume(a.volume) })
 		})
-		k.row("淡入淡出", "每首歌快结束时渐渐变轻，下一首渐渐响起，两首歌衔接在一起", func() {
-			k.toggle("crossfade", "淡入淡出", &s.Crossfade, false, nil)
+		k.row(c, "淡入淡出", "每首歌快结束时渐渐变轻，下一首渐渐响起，两首歌衔接在一起", func() {
+			k.toggle(c, "crossfade", "淡入淡出", &s.Crossfade, false, nil)
 		})
 		if s.Crossfade {
-			k.row("淡入淡出时长", "两首歌重叠的时间", func() {
+			k.row(c, "淡入淡出时长", "两首歌重叠的时间", func() {
 				labels := make([]string, len(crossfadeChoices))
 				chosen := ""
 				for i, n := range crossfadeChoices {
@@ -733,7 +732,7 @@ func (a *app) settingsPlaybackPage(k *settingsKit) {
 						chosen = labels[i]
 					}
 				}
-				k.choose("crossfade-sec", "淡入淡出时长", chosen, labels, func(i int) {
+				k.choose(c, "crossfade-sec", "淡入淡出时长", chosen, labels, func(i int) {
 					s.CrossfadeSec = crossfadeChoices[i]
 					a.changed()
 				})
@@ -743,18 +742,20 @@ func (a *app) settingsPlaybackPage(k *settingsKit) {
 		if s.Effects.On {
 			desc = "当前：" + a.presetLabel()
 		}
-		k.stateRow("音效", desc, func() {
-			if k.button("effects-open", "调节…", nil, false, false).Clicked() {
+		k.stateRow(c, "音效", desc, func() {
+			if k.button(c, "effects-open", "调节…", nil, false, false).Clicked() {
 				a.openEffects()
 			}
 			if settingSwitch(c.Key("effects-on"), &s.Effects.On).Label("开启音效").Changed() {
 				a.effectsChanged()
 			}
 		})
-		a.outputRow(c, k.row)
+		a.outputRow(c, func(label, desc string, control func()) { k.row(c, label, desc, control) })
 	})
-	k.foot("无损与 Hi-Res 需要黑胶 VIP，换音质从下一首开始生效。音量均衡让每首歌听起来一样响；淡入淡出让前后两首衔接在一起。")
-	k.group("定时", func() { a.sleepRow(c, k.stateRow) })
+	k.foot(c, "无损与 Hi-Res 需要黑胶 VIP，换音质从下一首开始生效。音量均衡让每首歌听起来一样响；淡入淡出让前后两首衔接在一起。")
+	k.group(c, "定时", func() {
+		a.sleepRow(c, func(label, desc string, control func()) { k.stateRow(c, label, desc, control) })
+	})
 }
 
 // scaleChoices are sizes of lyrics, from small to large, in tenths.
@@ -775,10 +776,10 @@ func scaleLabel(v float64) string {
 }
 
 // settingsThemeGroup chooses the theme and its colors.
-func (a *app) settingsThemeGroup(k *settingsKit) {
-	c, ink, s := k.c, k.ink, &a.settings
-	k.group("主题", func() {
-		k.row("外观", "浅色、深色，或跟着系统切换", func() {
+func (a *app) settingsThemeGroup(c *ui.Context, k *settingsKit) {
+	ink, s := k.ink, &a.settings
+	k.group(c, "主题", func() {
+		k.row(c, "外观", "浅色、深色，或跟着系统切换", func() {
 			modes := []string{"system", "light", "dark"}
 			i := 0
 			for k, m := range modes {
@@ -791,7 +792,7 @@ func (a *app) settingsThemeGroup(k *settingsKit) {
 				a.changed()
 			}
 		})
-		k.row("背景色", "窗口和侧栏的底色，按钮与高亮跟着它", func() {
+		k.row(c, "背景色", "窗口和侧栏的底色，按钮与高亮跟着它", func() {
 			dark := c.Theme().Dark
 			base := paletteFor(c.Theme())
 			for _, ac := range accentColors {
@@ -842,9 +843,9 @@ func (a *app) settingsThemeGroup(k *settingsKit) {
 				a.redraw()
 			}
 		})
-		k.row("跟随系统主题色", "使用 Windows 个性化里的主题色，系统换色时跟着变", func() {
+		k.row(c, "跟随系统主题色", "使用 Windows 个性化里的主题色，系统换色时跟着变", func() {
 			on := s.Accent == accentSystem
-			if settingSwitch(k.c.Key("accent-system"), &on).Label("跟随系统主题色").Disabled(a.sysAccent == "" && !on).Changed() {
+			if settingSwitch(c.Key("accent-system"), &on).Label("跟随系统主题色").Disabled(a.sysAccent == "" && !on).Changed() {
 				s.Accent = ""
 				if on {
 					s.Accent, s.AccentCover = accentSystem, false
@@ -852,17 +853,17 @@ func (a *app) settingsThemeGroup(k *settingsKit) {
 				a.changed()
 			}
 		})
-		k.row("主题色跟随封面", "按钮和高亮使用当前歌曲封面的颜色", func() {
-			k.toggle("accent-cover", "主题色跟随封面", &s.AccentCover, false, nil)
+		k.row(c, "主题色跟随封面", "按钮和高亮使用当前歌曲封面的颜色", func() {
+			k.toggle(c, "accent-cover", "主题色跟随封面", &s.AccentCover, false, nil)
 		})
 	})
-	k.foot("背景色决定窗口和侧栏的底色，按钮与高亮跟着它。跟随封面时，改用当前歌曲封面的颜色。")
+	k.foot(c, "背景色决定窗口和侧栏的底色，按钮与高亮跟着它。跟随封面时，改用当前歌曲封面的颜色。")
 }
 
-func (a *app) settingsStoragePage(k *settingsKit) {
-	c, ink, s := k.c, k.ink, &a.settings
-	k.group("下载", func() {
-		k.row("下载音质", "可以和播放音质不同；无损与 Hi-Res 占用的空间大得多", func() {
+func (a *app) settingsStoragePage(c *ui.Context, k *settingsKit) {
+	ink, s := k.ink, &a.settings
+	k.group(c, "下载", func() {
+		k.row(c, "下载音质", "可以和播放音质不同；无损与 Hi-Res 占用的空间大得多", func() {
 			labels := make([]string, len(downloadLevels))
 			chosen := downloadLevels[0].label
 			for i, d := range downloadLevels {
@@ -871,13 +872,13 @@ func (a *app) settingsStoragePage(k *settingsKit) {
 					chosen = d.label
 				}
 			}
-			k.choose("download-quality", "下载音质", chosen, labels, func(i int) {
+			k.choose(c, "download-quality", "下载音质", chosen, labels, func(i int) {
 				s.DownloadQuality = downloadLevels[i].level
 				a.changed()
 			})
 		})
 		folder := a.downloadFolder()
-		k.block("下载文件夹 路径 位置 "+folder, func() {
+		k.block(c, "下载文件夹 路径 位置 "+folder, func() {
 			first := k.rows == 1
 			line := ink.line
 			ui.Row(c).Padding(11, 20).Gap(20).AlignItems(ui.Center).MinHeight(62).
@@ -894,48 +895,48 @@ func (a *app) settingsStoragePage(k *settingsKit) {
 						})
 						ui.Text(c, folder).FontSize(12).Font("Cascadia Mono, Consolas, monospace").TextColor(ink.muted).SingleLine()
 					})
-					if k.button("download-browse", "更改…", nil, false, false).Clicked() {
+					if k.button(c, "download-browse", "更改…", nil, false, false).Clicked() {
 						a.pickDownloadFolder()
 					}
-					if k.button("download-open", "打开", iconExternal, false, false).Clicked() {
+					if k.button(c, "download-open", "打开", iconExternal, false, false).Clicked() {
 						a.openDownloadFolder()
 					}
 				})
 		})
 	})
-	k.group("本地音乐", func() {
+	k.group(c, "本地音乐", func() {
 		for _, dir := range s.LocalFolders {
-			k.stateRow(filepath.Base(dir), dir, func() {
-				if k.button("local-open-"+dir, "打开", iconExternal, false, false).Clicked() {
+			k.stateRow(c, filepath.Base(dir), dir, func() {
+				if k.button(c, "local-open-"+dir, "打开", iconExternal, false, false).Clicked() {
 					mygo.Shell.OpenPath(dir)
 				}
-				if k.button("local-remove-"+dir, "移除", nil, false, true).Clicked() {
+				if k.button(c, "local-remove-"+dir, "移除", nil, false, true).Clicked() {
 					a.removeLibraryFolder(dir)
 				}
 			})
 		}
-		k.row("添加文件夹", "读取文件夹和子文件夹里支持的音频，显示在「本地音乐」，文件夹有变化时自动更新", func() {
-			if k.button("local-add", "添加…", iconPlus, false, false).Clicked() {
+		k.row(c, "添加文件夹", "读取文件夹和子文件夹里支持的音频，显示在「本地音乐」，文件夹有变化时自动更新", func() {
+			if k.button(c, "local-add", "添加…", iconPlus, false, false).Clicked() {
 				a.pickLibraryFolder()
 			}
 		})
 		if canRegisterOpenWith {
-			k.row("用 Cloudy-NEXT 打开音乐文件", "加入 MP3、FLAC 的「打开方式」；要设为默认播放器，请在系统的默认应用设置里选择 Cloudy-NEXT", func() {
-				if k.button("open-with", "添加到打开方式", nil, false, false).Clicked() {
+			k.row(c, "用 Cloudy-NEXT 打开音乐文件", "加入 MP3、FLAC 的「打开方式」；要设为默认播放器，请在系统的默认应用设置里选择 Cloudy-NEXT", func() {
+				if k.button(c, "open-with", "添加到打开方式", nil, false, false).Clicked() {
 					if err := registerOpenWith(); err != nil {
 						a.toast = "添加失败：" + err.Error()
 					} else {
 						a.toast = "已添加：在音乐文件上右键「打开方式」就能选择 Cloudy-NEXT"
 					}
 				}
-				if k.button("default-apps", "默认应用设置", iconExternal, false, false).Clicked() {
+				if k.button(c, "default-apps", "默认应用设置", iconExternal, false, false).Clicked() {
 					mygo.Shell.OpenExternal("ms-settings:defaultapps")
 				}
 			})
 		}
 	})
-	k.group("缓存", func() {
-		k.stateRow("歌曲缓存", "听过的歌保存在本机，再听不用等也不耗流量；"+a.cacheUsage(), func() {
+	k.group(c, "缓存", func() {
+		k.stateRow(c, "歌曲缓存", "听过的歌保存在本机，再听不用等也不耗流量；"+a.cacheUsage(), func() {
 			labels := make([]string, len(cacheLimits))
 			chosen := cacheLimits[2].label
 			for i, l := range cacheLimits {
@@ -944,14 +945,14 @@ func (a *app) settingsStoragePage(k *settingsKit) {
 					chosen = l.label
 				}
 			}
-			k.choose("cache", "歌曲缓存", chosen, labels, func(i int) {
+			k.choose(c, "cache", "歌曲缓存", chosen, labels, func(i int) {
 				s.CacheMB = cacheLimits[i].mb
 				a.changed()
 				a.applyCacheLimit()
 			})
 		})
 		where := songCacheDir(s.CacheFolder)
-		k.block("缓存位置 缓存文件夹 路径 "+where, func() {
+		k.block(c, "缓存位置 缓存文件夹 路径 "+where, func() {
 			line := ink.line
 			ui.Row(c).Padding(11, 20).Gap(20).AlignItems(ui.Center).MinHeight(62).
 				Draw(func(p *ui.Painter, b ui.Rect) {
@@ -965,80 +966,80 @@ func (a *app) settingsStoragePage(k *settingsKit) {
 						})
 						ui.Text(c, where).FontSize(12).Font("Cascadia Mono, Consolas, monospace").TextColor(ink.muted).SingleLine()
 					})
-					if s.CacheFolder != "" && k.button("cache-default", "恢复默认", nil, false, false).Clicked() {
+					if s.CacheFolder != "" && k.button(c, "cache-default", "恢复默认", nil, false, false).Clicked() {
 						a.setCacheFolder("")
 					}
-					if k.button("cache-browse", "更改…", nil, false, false).Clicked() {
+					if k.button(c, "cache-browse", "更改…", nil, false, false).Clicked() {
 						a.pickCacheFolder()
 					}
-					if k.button("cache-open", "打开", iconExternal, false, false).Clicked() {
+					if k.button(c, "cache-open", "打开", iconExternal, false, false).Clicked() {
 						a.openCacheFolder()
 					}
 				})
 		})
-		k.row("清除缓存", "删除保存在本机的全部缓存歌曲，下载的歌曲不受影响", func() {
-			if k.button("clear-cache", "清除", nil, a.cacheUsed <= 0, true).Clicked() {
+		k.row(c, "清除缓存", "删除保存在本机的全部缓存歌曲，下载的歌曲不受影响", func() {
+			if k.button(c, "clear-cache", "清除", nil, a.cacheUsed <= 0, true).Clicked() {
 				a.clearCache()
 			}
 		})
 	})
 }
 
-func (a *app) settingsSystemPage(k *settingsKit) {
+func (a *app) settingsSystemPage(c *ui.Context, k *settingsKit) {
 	s := &a.settings
-	k.group("快捷键", func() {
+	k.group(c, "快捷键", func() {
 		keys := "在其他软件里也能用"
 		if !s.GlobalKeys {
 			keys = "已关闭"
 		} else if a.keys.taken > 0 {
 			keys = fmt.Sprintf("有 %d 组被其他软件占用", a.keys.taken)
 		}
-		k.stateRow("全局快捷键", keys, func() {
-			if k.button("shortcut-custom", "自定义", nil, false, false).Clicked() {
+		k.stateRow(c, "全局快捷键", keys, func() {
+			if k.button(c, "shortcut-custom", "自定义", nil, false, false).Clicked() {
 				a.openShortcutEditor()
 			}
-			k.toggle("global-keys", "全局快捷键", &s.GlobalKeys, false, a.applyGlobalKeys)
+			k.toggle(c, "global-keys", "全局快捷键", &s.GlobalKeys, false, a.applyGlobalKeys)
 		})
 	})
-	k.group("启动", func() {
+	k.group(c, "启动", func() {
 		login := a.openAtLogin()
-		k.row("开机时启动", "登录 Windows 后自动打开 Cloudy-NEXT", func() {
+		k.row(c, "开机时启动", "登录 Windows 后自动打开 Cloudy-NEXT", func() {
 			on := login
-			if settingSwitch(k.c.Key("open-at-login"), &on).Label("开机时启动").Changed() {
+			if settingSwitch(c.Key("open-at-login"), &on).Label("开机时启动").Changed() {
 				a.setOpenAtLogin(on)
 			}
 		})
-		k.sub("隐藏到托盘", "开机自动打开时不弹出窗口，从托盘图标打开", login, func() {
-			k.toggle("start-hidden", "开机启动时隐藏到托盘", &s.StartHidden, false, nil)
+		k.sub(c, "隐藏到托盘", "开机自动打开时不弹出窗口，从托盘图标打开", login, func() {
+			k.toggle(c, "start-hidden", "开机启动时隐藏到托盘", &s.StartHidden, false, nil)
 		})
 	})
-	k.group("关闭窗口", func() {
+	k.group(c, "关闭窗口", func() {
 		choices := []string{"最小化到托盘", "退出 Cloudy-NEXT"}
 		chosen := choices[0]
 		if s.CloseQuits {
 			chosen = choices[1]
 		}
-		k.row("点击关闭按钮时", "最小化到托盘时音乐继续播放，从托盘图标打开", func() {
-			k.choose("close-action", "点击关闭按钮时", chosen, choices, func(i int) {
+		k.row(c, "点击关闭按钮时", "最小化到托盘时音乐继续播放，从托盘图标打开", func() {
+			k.choose(c, "close-action", "点击关闭按钮时", chosen, choices, func(i int) {
 				s.CloseQuits = i == 1
 				a.changed()
 			})
 		})
 	})
-	k.group("任务栏", func() {
-		k.row("播放进度", "在任务栏图标上显示当前歌曲播放到哪里，暂停时显示为黄色", func() {
-			k.toggle("taskbar-progress", "任务栏播放进度", &s.TaskbarProgress, false, a.syncProgress)
+	k.group(c, "任务栏", func() {
+		k.row(c, "播放进度", "在任务栏图标上显示当前歌曲播放到哪里，暂停时显示为黄色", func() {
+			k.toggle(c, "taskbar-progress", "任务栏播放进度", &s.TaskbarProgress, false, a.syncProgress)
 		})
 	})
-	k.group("小窗口", func() {
-		k.row("迷你窗口", "用一个置顶的小窗口代替主窗口；托盘菜单里也能打开", func() {
-			if k.button("mini", "打开", nil, false, false).Clicked() {
+	k.group(c, "小窗口", func() {
+		k.row(c, "迷你窗口", "用一个置顶的小窗口代替主窗口；托盘菜单里也能打开", func() {
+			if k.button(c, "mini", "打开", nil, false, false).Clicked() {
 				a.settingsView.open = false
 				a.showMini()
 			}
 		})
-		k.row("重置窗口位置", "桌面歌词和迷你窗口回到主屏幕的默认位置，找不到它们时用", func() {
-			if k.button("reset-spots", "重置", nil, false, false).Clicked() {
+		k.row(c, "重置窗口位置", "桌面歌词和迷你窗口回到主屏幕的默认位置，找不到它们时用", func() {
+			if k.button(c, "reset-spots", "重置", nil, false, false).Clicked() {
 				a.resetFloatSpots()
 				a.say("reset-spots", "桌面歌词和迷你窗口已回到默认位置")
 			}
@@ -1046,27 +1047,27 @@ func (a *app) settingsSystemPage(k *settingsKit) {
 	})
 }
 
-func (a *app) settingsAboutPage(k *settingsKit) {
+func (a *app) settingsAboutPage(c *ui.Context, k *settingsKit) {
 	s := &a.settings
-	k.group("软件信息", func() {
-		k.block("软件信息 版本 项目 开源 "+mygo.App.Version(), func() { a.aboutCard(k) })
+	k.group(c, "软件信息", func() {
+		k.block(c, "软件信息 版本 项目 开源 "+mygo.App.Version(), func() { a.aboutCard(c, k) })
 	})
 	if a.updates {
-		k.group("更新", func() {
+		k.group(c, "更新", func() {
 			desc := "每天检查一次是否有新版本"
 			if s.UpdateChecked > 0 {
 				desc += "；上次检查：" + commentTime(time.Unix(s.UpdateChecked, 0), time.Now())
 			}
-			k.stateRow("提醒新版本", desc, func() {
-				k.toggle("update-checks", "提醒新版本", &s.UpdateChecks, false, nil)
+			k.stateRow(c, "提醒新版本", desc, func() {
+				k.toggle(c, "update-checks", "提醒新版本", &s.UpdateChecks, false, nil)
 			})
 			// Keep this option visible and independently configurable when
 			// update reminders are off; it takes effect when checks are on.
-			k.row("自动安装更新", "后台发现新版本时直接装好，下次打开软件时生效；手动检查仍会先问你", func() {
-				k.toggle("update-downloads", "自动安装更新", &s.UpdateInstall, false, nil)
+			k.row(c, "自动安装更新", "后台发现新版本时直接装好，下次打开软件时生效；手动检查仍会先问你", func() {
+				k.toggle(c, "update-downloads", "自动安装更新", &s.UpdateInstall, false, nil)
 			})
-			k.stateRow("当前版本 "+mygo.App.Version(), "新版本来自 chenzihao0729/Cloudy-NEXT", func() {
-				if k.button("check-updates", "检查更新", nil, false, false).Clicked() {
+			k.stateRow(c, "当前版本 "+mygo.App.Version(), "新版本来自 chenzihao0729/Cloudy-NEXT", func() {
+				if k.button(c, "check-updates", "检查更新", nil, false, false).Clicked() {
 					a.checkForUpdates()
 				}
 			})

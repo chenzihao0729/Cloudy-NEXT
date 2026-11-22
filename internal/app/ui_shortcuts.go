@@ -92,12 +92,12 @@ func (a *app) shortcutEditorDialog(c *ui.Context) {
 				hint = "全局快捷键已关闭；可以先保存组合键，开启后生效"
 			}
 			dialogHeader(c, ink, "自定义全局快捷键", hint, func() { s.open = false })
-			k := &settingsKit{a: a, c: c, ink: ink}
+			k := &settingsKit{a: a, ink: ink}
 			ui.Scroll(c.Key("shortcut-list")).Grow(1).Shrink(1).TrackScroll(&s.scroll).Padding(0, 28, 4, 28).Children(func() {
-				k.card(func() {
+				k.card(c, func() {
 					for _, act := range shortcutActions {
 						recording := s.recording == act.id
-						k.row(act.label, shortcutDefaults(act), func() {
+						k.row(c, act.label, shortcutDefaults(act), func() {
 							if recording {
 								ui.Text(c, "按下组合键…").FontSize(12.5).FontWeight(600).TextColor(a.pal.accent)
 							} else {
@@ -107,7 +107,7 @@ func (a *app) shortcutEditorDialog(c *ui.Context) {
 							if recording {
 								label = "取消"
 							}
-							if k.button("record-"+act.id, label, nil, false, false).Width(72).Justify(ui.Center).Clicked() {
+							if k.button(c, "record-"+act.id, label, nil, false, false).Width(72).Justify(ui.Center).Clicked() {
 								if recording {
 									s.recording, s.err = "", ""
 								} else {
@@ -124,7 +124,7 @@ func (a *app) shortcutEditorDialog(c *ui.Context) {
 							if off {
 								toggle = "启用"
 							}
-							if !recording && k.button("off-"+act.id, toggle, nil, false, false).Width(60).Justify(ui.Center).Clicked() {
+							if !recording && k.button(c, "off-"+act.id, toggle, nil, false, false).Width(60).Justify(ui.Center).Clicked() {
 								a.setShortcutOff(act, !off)
 							}
 						})

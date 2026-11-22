@@ -311,25 +311,13 @@ func TestScrobbleNotOpen(t *testing.T) {
 	}
 }
 
-// The mail is off: its button says so and sending does nothing.
+// Disabled feedback must not dispatch mail even without a visible feedback entry.
 func TestFeedbackMailClosed(t *testing.T) {
 	if feedbackMailOpen {
 		t.Skip("the mail is open")
 	}
 	a := newTestApp()
-	a.settings = defaultSettings()
-	a.settingsView.open, a.settingsView.tab = true, settingsAbout
 	a.feedback.text = "你好"
-	tt := ui.NewTester(a.view, 1100, 900)
-	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
-	tt.Frame()
-	pane, _ := tt.Find("关于设置项")
-	tt.Scroll(pane.X+40, pane.Y+pane.H/2, 0, 2000)
-	tt.Advance(time.Second)
-	tt.Frame()
-	if !tt.HasText("用邮件发送 · 未开放") {
-		t.Fatal("the mail button does not say it is closed")
-	}
 	a.sendFeedback()
 	if a.feedback.sending {
 		t.Fatal("feedback went by mail while it is closed")

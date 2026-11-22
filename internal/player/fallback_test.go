@@ -11,6 +11,31 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// External search songs must never pass their synthetic ID to NetEase's playback API.
+func TestExternalSongBypassesNetEase(t *testing.T) {
+	old := songURL
+	defer func() { songURL = old }()
+	songURL = func(context.Context, int64, string) (*netease.Stream, error) {
+		t.Fatal("external ID reached NetEase")
+		return nil, nil
+	}
+	track := netease.Track{ID: -99, Source: &netease.SourceTrack{Platform: "tx", ID: "mid"}}
+	p := &Player{Fallback: func(_ context.Context, tr netease.Track, _ string, _ []string) (*netease.Stream, error) {
+		if tr.Source.ID != "mid" {
+			t.Fatal("missing provider identity")
+		}
+		return &netease.Stream{Source: "qq", SourceID: "mid"}, nil
+	}}
+	st, err := p.streamInfo(context.Background(), track, "exhigh")
+	if err != nil || st.SourceID != "mid" {
+		t.Fatalf("%+v %v", st, err)
+	}
+	p.Fallback = nil
+	if _, err := p.streamInfo(context.Background(), track, "exhigh"); err == nil {
+		t.Fatal("external song without resolver succeeded")
+	}
+}
+
 // An unavailable track uses the configured source only when account policy prefers it.
 func TestFallbackOnlyWhenSelectedByPolicy(t *testing.T) {
 	old := songURL

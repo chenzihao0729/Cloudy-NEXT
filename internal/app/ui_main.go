@@ -324,6 +324,10 @@ func (a *app) load(r route) {
 		a.loadSearch(r, false)
 	case pageArtist:
 		a.loadArtist(r.id)
+	case pageQQArtist:
+		a.loadQQArtist(r, false)
+	case pageQQAlbum:
+		a.loadQQAlbum(r)
 	case pageAlbum:
 		a.loadAlbum(r.id)
 	case pageUser:
@@ -663,6 +667,10 @@ func (a *app) content(c *ui.Context, foreground float32) {
 			a.fmPage(c)
 		case pageArtist:
 			a.artistPage(c)
+		case pageQQArtist:
+			a.qqArtistPage(c)
+		case pageQQAlbum:
+			a.qqAlbumPage(c)
 		case pageAlbum:
 			a.albumPage(c)
 		case pageUser:
@@ -694,7 +702,11 @@ func (a *app) content(c *ui.Context, foreground float32) {
 func (a *app) centered(c *ui.Context, err string, retry func()) {
 	top, bottom := a.insets(c)
 	ui.Column(c).Grow(1).Padding(top, 0, bottom, 0).Center().Gap(12).Children(func() {
-		mascotView(c, 96)
+		if a.route.page == pageRecent {
+			ui.Image(c, roundIcon()).Size(96, 96).Fit(ui.Cover)
+		} else {
+			mascotView(c, 96)
+		}
 		ui.Text(c, err).TextColor(a.pal.muted).FontSize(13)
 		if retry != nil && ui.Button(c, "重试").Clicked() {
 			retry()

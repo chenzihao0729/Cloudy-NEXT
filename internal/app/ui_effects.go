@@ -130,14 +130,14 @@ func (a *app) effectsDialog(c *ui.Context) {
 		a.pane(panel, 26, false)
 		panel.Children(func() {
 			dialogHeader(c, ink, "音效", "", func() { v.open = false })
-			k := &settingsKit{a: a, c: c, ink: ink}
+			k := &settingsKit{a: a, ink: ink}
 			ui.Scroll(c.Key("effects-scroll")).Shrink(1).Padding(0, 28, 8, 28).Children(func() {
-				k.card(func() {
+				k.card(c, func() {
 					sub := "已关闭；选一个预设或手动调节就会打开"
 					if e.On {
 						sub = "当前：" + a.presetLabel() + "，对所有歌曲生效"
 					}
-					k.row("开启音效", sub, func() {
+					k.row(c, "开启音效", sub, func() {
 						if ui.Switch(c.Key("effects-on"), &e.On).Label("开启音效").Changed() {
 							a.effectsChanged()
 						}
@@ -152,9 +152,9 @@ func (a *app) effectsDialog(c *ui.Context) {
 				}
 				body.Children(func() {
 					if v.page == 0 {
-						a.presetTiles(k, (pw-56-2*10)/3)
+						a.presetTiles(c, k, (pw-56-2*10)/3)
 					} else {
-						a.customEffects(k)
+						a.customEffects(c, k)
 					}
 				})
 			})
@@ -176,8 +176,8 @@ func (a *app) effectsDialog(c *ui.Context) {
 // presetTiles is the presets' page: effects that choose themselves for
 // each song, the sound placed round the head, and the presets of a kind
 // of music, as tiles, each group saying which of it is chosen.
-func (a *app) presetTiles(k *settingsKit, colw float32) {
-	c, ink := k.c, k.ink
+func (a *app) presetTiles(c *ui.Context, k *settingsKit, colw float32) {
+	ink := k.ink
 	e := &a.settings.Effects
 	section := func(title, chosen, note string) {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Margin(18, 0, 8, 18).Children(func() {
@@ -244,9 +244,9 @@ func (a *app) presetTiles(k *settingsKit, colw float32) {
 	})
 	if e.On && e.Spatial == player.Spatial8D {
 		ui.Box(c).Height(10)
-		k.card(func() {
+		k.card(c, func() {
 			period := 16 - 12*e.Orbit
-			k.row("转速", fmt.Sprintf("约 %.0f 秒转一圈", period), func() { a.effectSlider(c, "转速", &e.Orbit, 0, ink) })
+			k.row(c, "转速", fmt.Sprintf("约 %.0f 秒转一圈", period), func() { a.effectSlider(c, "转速", &e.Orbit, 0, ink) })
 		})
 	}
 	chosenStyle := ""
@@ -323,35 +323,35 @@ func (a *app) presetTile(c *ui.Context, key, label, desc, color string, icon *ui
 // customEffects is the page of what the listener shapes: the bands, the
 // enhancements, the voice and the evening out, and the room, in the
 // settings' groups.
-func (a *app) customEffects(k *settingsKit) {
-	c, ink := k.c, k.ink
+func (a *app) customEffects(c *ui.Context, k *settingsKit) {
+	ink := k.ink
 	e := &a.settings.Effects
 	slider := func(label, desc string, v *float64, lo float64) {
-		k.row(label, desc, func() { a.effectSlider(c, label, v, lo, ink) })
+		k.row(c, label, desc, func() { a.effectSlider(c, label, v, lo, ink) })
 	}
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Margin(18, 0, 8, 18).Children(func() {
 		ui.Text(c, "均衡器").FontSize(12.5).FontWeight(600).TextColor(ink.muted).Grow(1)
 		ui.Text(c, "双击推子归零").FontSize(11.5).TextColor(ink.faint)
 	})
-	k.card(func() { a.equalizer(c, ink) })
-	k.group("增强", func() {
+	k.card(c, func() { a.equalizer(c, ink) })
+	k.group(c, "增强", func() {
 		slider("低音", "向左减弱，向右加强", &e.Bass, -1)
 		slider("高音", "向左减弱，向右加强", &e.Treble, -1)
 		slider("环绕深度", "声音前后的层次", &e.Depth, 0)
 		slider("环绕强度", "左右声场的宽度", &e.Width, 0)
-		k.row("重置增强", "低音、高音和环绕都回到 0", func() {
-			if k.button("enhance-reset", "重置", iconReload, e.Bass == 0 && e.Treble == 0 && e.Depth == 0 && e.Width == 0, false).Clicked() {
+		k.row(c, "重置增强", "低音、高音和环绕都回到 0", func() {
+			if k.button(c, "enhance-reset", "重置", iconReload, e.Bass == 0 && e.Treble == 0 && e.Depth == 0 && e.Width == 0, false).Clicked() {
 				e.Bass, e.Treble, e.Depth, e.Width = 0, 0, 0, 0
 				a.shaped()
 			}
 		})
 	})
-	k.group("人声与响度", func() {
+	k.group(c, "人声与响度", func() {
 		slider("人声增强", "居中的人声更靠前、更清楚，伴奏不受影响", &e.Vocal, 0)
 		slider("响度均衡", "压低过响的段落、抬起轻柔的段落", &e.Loudness, 0)
 	})
-	k.group("环境", func() {
-		k.row("环境音效", "让声音像在不同的空间里播放", func() {
+	k.group(c, "环境", func() {
+		k.row(c, "环境音效", "让声音像在不同的空间里播放", func() {
 			labels := make([]string, len(player.Rooms))
 			chosen := player.Rooms[0].Label
 			for i, r := range player.Rooms {
@@ -360,7 +360,7 @@ func (a *app) customEffects(k *settingsKit) {
 					chosen = r.Label
 				}
 			}
-			k.choose("room-select", "环境音效", chosen, labels, func(i int) {
+			k.choose(c, "room-select", "环境音效", chosen, labels, func(i int) {
 				e.Room = player.Rooms[i].ID
 				a.shaped()
 			})

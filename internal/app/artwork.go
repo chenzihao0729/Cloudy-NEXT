@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"image"
 	"image/color"
@@ -173,7 +174,9 @@ const artRetry = 30 * time.Second
 // loadArt fetches the cover at url, as a bitmap to draw and an image to
 // measure, with the bytes of its data.
 func loadArt(url string) (*ui.Bitmap, image.Image, int, error) {
-	b, err := netease.Fetch(url)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	b, err := netease.FetchContext(ctx, url)
 	if err != nil {
 		return nil, nil, 0, err
 	}

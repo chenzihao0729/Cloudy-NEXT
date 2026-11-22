@@ -414,6 +414,9 @@ func (a *app) removeFrom(pid int64, tr *netease.Track) {
 // listener's playlists, or take it out of pid, the one it is listed in, if
 // set.
 func (a *app) playlistActions(tr *netease.Track, pid int64) []menuAction {
+	if tr.Source != nil {
+		return nil
+	}
 	if a.profile == nil {
 		return nil
 	}

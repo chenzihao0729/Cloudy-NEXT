@@ -33,8 +33,9 @@ var searchKinds = []struct {
 
 // searchData is what a search found, as far as its pages have loaded.
 type searchData struct {
-	res  netease.SearchResult
-	page paged
+	res   netease.SearchResult
+	page  paged
+	multi *multiSearch
 }
 
 // search searches for q, of the kind last searched for.
@@ -68,14 +69,25 @@ func (a *app) loadSearch(r route, again bool) {
 	if a.searches[r] != nil && !again {
 		return
 	}
+	if old := a.searches[r]; old != nil && old.multi != nil {
+		old.multi.cancel()
+	}
 	d := &searchData{}
 	a.searches[r] = d
-	a.moreResults(r, d)
+	if r.kind == netease.SearchSongs && a.source != nil {
+		a.startMultiSearch(r, d)
+	} else {
+		a.moreResults(r, d)
+	}
 }
 
 // moreResults loads the next page of a search. A search done again has
 // new data, so the last one's pages land where nothing shows them.
 func (a *app) moreResults(r route, d *searchData) {
+	if d.multi != nil {
+		a.moreMultiSearch(r, d)
+		return
+	}
 	if d.page.loading {
 		return
 	}
@@ -198,7 +210,7 @@ func (a *app) searchHeader(c *ui.Context, d *searchData) {
 			r.kind = searchKinds[at].kind
 			a.show(r)
 		}
-		if r.kind == netease.SearchSongs && len(d.res.Songs) > 0 {
+		if r.kind == netease.SearchSongs && d.multi == nil && len(d.res.Songs) > 0 {
 			ui.Spacer(c)
 			a.batchEntry(c)
 		}

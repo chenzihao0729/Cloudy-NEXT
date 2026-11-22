@@ -5,9 +5,11 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"log"
 
 	"github.com/egoist/mygo"
 	"golang.org/x/image/vector"
+	"netease-music-mygo/resources"
 )
 
 // The window's taskbar thumbnail (Windows), as NetEase's own app has it:
@@ -48,7 +50,8 @@ func (a *app) syncThumbs() {
 			canLike: tr.LocalPath == "",
 		}
 	}
-	st.switcher = a.altTab
+	// Keep the artwork thumbnail in Alt+Tab as well as taskbar previews.
+	st.switcher = false
 	a.syncProgress()
 	at := a.thumbsAt
 	if at != nil && *at == st {
@@ -68,7 +71,7 @@ func (a *app) syncThumbs() {
 		if !window {
 			a.win.SetThumbnail(nil) // the window again
 		}
-	case st.cover && (at == nil || window || at.track != st.track || !at.cover):
+	case at == nil || window || at.track != st.track || at.cover != st.cover:
 		// The new cover is in. Until it is, the one before stays: going
 		// back to the window in between, which shows nothing while it is
 		// minimized or in the tray, left the thumbnail blank.
@@ -81,9 +84,13 @@ func (a *app) syncThumbs() {
 		}
 		// Match the player bar for animated WebP art: the system's
 		// image decoder needs a still frame rather than the animation.
-		a.win.SetThumbnail(stillCover(a.pl.Cover()))
+		cover := systemThumbnail(a.pl.Cover())
+		if len(cover) == 0 {
+			cover = resources.RoundIcon
+		}
+		a.win.SetThumbnail(cover)
 	}
-	if st.track == 0 {
+	if st.track == 0 || st.switcher {
 		a.win.SetThumbButtons(nil)
 		return
 	}
@@ -108,6 +115,24 @@ func (a *app) syncThumbs() {
 		{Icon: thumbGlyph(glyphNext, ink), Tooltip: "下一首", Click: act(a.pl.Next)},
 		{Icon: heart, Tooltip: heartTip, Disabled: !st.canLike, Click: act(a.likeCurrent)},
 	})
+}
+
+// Windows' thumbnail decoder accepts PNG/JPEG only; catalog artwork can
+// also be WebP, which otherwise silently restores the window screenshot.
+func systemThumbnail(data []byte) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+	img, _, err := image.Decode(bytes.NewReader(stillCover(data)))
+	if err != nil {
+		log.Printf("thumbnail: decode cover: %v", err)
+		return nil
+	}
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		return nil
+	}
+	return out.Bytes()
 }
 
 // songTitle is the window's title for a song: its name and its artists,

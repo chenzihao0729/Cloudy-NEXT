@@ -298,14 +298,14 @@ func (a *app) lyricTools(c *ui.Context, id int64, at ui.Rect) {
 			chip("larger", "歌词字号增大", 30, false, func() { size(0.1) }, word("A", 16))
 		})
 		group("time", func() {
-			chip("earlier", "歌词提前 0.1 秒", 44, false, func() { move(100) }, word("提前", 13))
+			chip("later", "歌词延后 0.1 秒", 44, false, func() { move(-100) }, word("延后", 13))
 			precision := 1
 			if shift%100 != 0 {
 				precision = 2
 			}
 			value := chip("reset", "恢复歌词时间", 52, shift != 0, func() { move(-shift) }, number(fmt.Sprintf("%+.*fs", precision, float64(shift)/1000)))
 			a.lyricWheelOn(value, "滚动滚轮微调歌词时间，点击复位", func(n int) { move(n * 10) })
-			chip("later", "歌词延后 0.1 秒", 44, false, func() { move(-100) }, word("延后", 13))
+			chip("earlier", "歌词提前 0.1 秒", 44, false, func() { move(100) }, word("提前", 13))
 		})
 		// The rest of the lyrics' settings, in the settings.
 		group("more", func() {

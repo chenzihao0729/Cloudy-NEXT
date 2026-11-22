@@ -143,7 +143,7 @@ type settings struct {
 	UIZoom float64 `json:"uiZoom,omitempty"`
 	// TaskbarProgress shows how far the song has played on the window's
 	// taskbar button.
-	TaskbarProgress bool `json:"taskbarProgress,omitempty"`
+	TaskbarProgress bool `json:"taskbarProgress"`
 	// MiniX and MiniY are where the mini window was left.
 	MiniX int `json:"miniX,omitempty"`
 	MiniY int `json:"miniY,omitempty"`
@@ -258,6 +258,12 @@ type settings struct {
 }
 
 func defaultSettings() settings {
+	s := baseSettings()
+	s.TaskbarProgress = true
+	return s
+}
+
+func baseSettings() settings {
 	return settings{Crossfade: true, CrossfadeSec: 2, BarSpin: true, GlobalKeys: true, NotchActivity: true, Quality: "exhigh", Appearance: "system", LiquidGlass: true, SidebarGlass: true, MainGlass: true, NpLight: true, GlowLevel: 0.5, GlassClear: 0.6, GlassBend: 0.3, GlassPanels: true, Volume: 0.8, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, LyricTrans: true, LyricBlur: true, NpCalm: true, LyricBlurLevel: 0.5, MoreWords: true, LyricTilt: 0.5, LyricBounce: 0.5, DeskWords: true}
 }
 

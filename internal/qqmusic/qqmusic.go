@@ -18,14 +18,24 @@ const searchEndpoint = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp"
 var client = &http.Client{Timeout: 12 * time.Second}
 
 type Song struct {
-	MID      string
-	MediaMID string
-	Name     string
-	Artists  []string
-	Album    string
-	AlbumMID string
-	Duration time.Duration
-	CoverURL string
+	Disc       int
+	Track      int
+	MID        string
+	MediaMID   string
+	Name       string
+	ArtistMIDs []string
+	Artists    []string
+	Album      string
+	AlbumMID   string
+	Duration   time.Duration
+	CoverURL   string
+}
+
+func fullSongTitle(title, name string) string {
+	if strings.TrimSpace(title) != "" {
+		return title
+	}
+	return name
 }
 
 type searchResponse struct {
@@ -41,6 +51,7 @@ type searchResponse struct {
 				Seconds  int    `json:"interval"`
 				Singers  []struct {
 					Name string `json:"name"`
+					MID  string `json:"mid"`
 				} `json:"singer"`
 			} `json:"list"`
 		} `json:"song"`
@@ -48,6 +59,10 @@ type searchResponse struct {
 }
 
 func Search(ctx context.Context, query string, limit int) ([]Song, error) {
+	return SearchPage(ctx, query, limit, 1)
+}
+
+func SearchPage(ctx context.Context, query string, limit, page int) ([]Song, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, errors.New("qqmusic: empty search")
@@ -58,7 +73,7 @@ func Search(ctx context.Context, query string, limit int) ([]Song, error) {
 	u, _ := url.Parse(searchEndpoint)
 	q := u.Query()
 	q.Set("format", "json")
-	q.Set("p", "1")
+	q.Set("p", strconv.Itoa(max(1, page)))
 	q.Set("n", strconv.Itoa(limit))
 	q.Set("w", query)
 	u.RawQuery = q.Encode()
@@ -96,6 +111,7 @@ func Search(ctx context.Context, query string, limit int) ([]Song, error) {
 		for _, artist := range item.Singers {
 			if name := strings.TrimSpace(artist.Name); name != "" {
 				song.Artists = append(song.Artists, name)
+				song.ArtistMIDs = append(song.ArtistMIDs, artist.MID)
 			}
 		}
 		if item.AlbumMID != "" {

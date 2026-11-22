@@ -30,7 +30,7 @@ func TestGlassPanelsOffIsKept(t *testing.T) {
 	}
 }
 
-// The settings open over the window, and Escape closes them.
+// Settings stays open on Escape and closes only through its explicit close button.
 func TestSettingsOverTheWindow(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
@@ -42,10 +42,17 @@ func TestSettingsOverTheWindow(t *testing.T) {
 		t.Fatalf("the settings did not open: %q", tt.Texts())
 	}
 	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	if !a.settingsView.open {
+		t.Fatal("Escape closed settings")
+	}
+	if err := tt.Click("关闭"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Advance(time.Second)
 	tt.Frame()
 	if _, ok := tt.Find("设置分类：账号"); a.settingsView.open || ok {
-		t.Error("Escape did not close the settings")
+		t.Error("close button did not close the settings")
 	}
 }
 

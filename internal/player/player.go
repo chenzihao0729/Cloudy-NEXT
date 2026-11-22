@@ -51,6 +51,7 @@ type Player struct {
 	// FallbackLyrics and FallbackCover fetch metadata for the exact matched
 	// third-party song, if set.
 	FallbackLyrics func(context.Context, string) string
+	SourceLyrics   func(context.Context, string, string) string
 	FallbackCover  func(context.Context, string) ([]byte, error)
 	// PreferFallback selects the configured source before NetEase for this track.
 	PreferFallback func(netease.Track) bool
@@ -895,7 +896,7 @@ func (p *Player) loadAttempt(at, skipped int, play bool, from time.Duration, dir
 	p.cancelLoad = cancel
 	p.at = at
 	t := p.queue[p.order[at]]
-	preferFallback := p.PreferFallback != nil && p.PreferFallback(t)
+	preferFallback := t.Source != nil || (p.PreferFallback != nil && p.PreferFallback(t))
 	p.track = &t
 	p.loading, p.playing, p.err = true, play, ""
 	p.awaiting = false
@@ -932,7 +933,9 @@ func (p *Player) loadAttempt(at, skipped int, play bool, from time.Duration, dir
 			}
 			if err == nil {
 				p.post(func() {
-					if gen == p.gen && (p.info == nil || p.info.Source != "qq") {
+					// Keep the catalog cover available even when plugin playback
+					// has no cover of its own. Never replace an already loaded one.
+					if gen == p.gen && p.Cover() == nil {
 						p.announce(&t, cover)
 						if p.Changed != nil {
 							p.Changed()
@@ -1098,11 +1101,14 @@ func (p *Player) opened(gen int, t netease.Track, info *netease.Stream, s stream
 }
 
 func (p *Player) fallbackMetadata(gen int, t netease.Track, info *netease.Stream) {
-	if info == nil || info.Source != "qq" || info.SourceID == "" {
+	if info == nil || info.Source == "" || info.SourceID == "" {
 		return
 	}
-	if p.FallbackLyrics != nil {
+	if p.SourceLyrics != nil || (p.FallbackLyrics != nil && info.Source == "qq") {
 		fetch := p.FallbackLyrics
+		if sourceFetch := p.SourceLyrics; sourceFetch != nil {
+			fetch = func(ctx context.Context, id string) string { return sourceFetch(ctx, info.Source, id) }
+		}
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 			defer cancel()
@@ -1190,7 +1196,7 @@ func openLocal(path string, d int64) (*netease.Stream, stream, error) {
 }
 
 func (p *Player) openContext(ctx context.Context, t netease.Track, level string) (*netease.Stream, stream, error) {
-	preferFallback := p.PreferFallback != nil && p.PreferFallback(t)
+	preferFallback := t.Source != nil || (p.PreferFallback != nil && p.PreferFallback(t))
 	return p.openContextPreferred(ctx, t, level, preferFallback, nil)
 }
 
@@ -1278,11 +1284,14 @@ func (p *Player) openContextPreferred(ctx context.Context, t netease.Track, leve
 }
 
 func (p *Player) streamInfo(ctx context.Context, t netease.Track, level string) (*netease.Stream, error) {
-	preferFallback := p.PreferFallback != nil && p.PreferFallback(t)
+	preferFallback := t.Source != nil || (p.PreferFallback != nil && p.PreferFallback(t))
 	return p.streamInfoPreferred(ctx, t, level, preferFallback, nil)
 }
 
 func (p *Player) streamInfoPreferred(ctx context.Context, t netease.Track, level string, preferFallback bool, excluded []string) (*netease.Stream, error) {
+	if t.Source != nil && p.Fallback == nil {
+		return nil, netease.ErrUnavailable
+	}
 	if preferFallback && p.Fallback != nil {
 		return p.Fallback(ctx, t, level, excluded)
 	}

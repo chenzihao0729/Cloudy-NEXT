@@ -1,13 +1,17 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/qqmusic"
+	"netease-music-mygo/internal/sourcecatalog"
 )
 
 // artistLinks shows a track's artists as its credits read, each a link to
@@ -25,6 +29,12 @@ func (a *app) artistLinks(c *ui.Context, tr *netease.Track, color, hover ui.Colo
 			switch {
 			case tr.PodcastID != 0:
 				a.link(c.Key(i), ar.Name, color, hover, podcast)
+			case ar.SourceMID != "":
+				song, artist := *tr, ar
+				a.artistActionLink(c.Key(i), ar.Name, color, hover, func() { openQQSongArtist(a, song, artist) })
+			case tr.Source != nil:
+				song, artist := *tr, ar
+				a.artistActionLink(c.Key(i), ar.Name, color, hover, func() { openQQSongArtist(a, song, artist) })
 			case ar.ID != 0:
 				a.link(c.Key(i), ar.Name, color, hover, route{page: pageArtist, id: ar.ID})
 			default:
@@ -39,20 +49,89 @@ func (a *app) artistLinks(c *ui.Context, tr *netease.Track, color, hover ui.Colo
 			case tr.Album.ID != 0:
 				a.link(c.Key("album"), tr.Album.Name, color, hover, route{page: pageAlbum, id: tr.Album.ID})
 			default:
-				ui.Text(c, tr.Album.Name)
+				a.trackAlbumLink(c.Key("album"), tr, color, hover)
 			}
 		}
 	})
 }
 
+var qqArtistNetEaseSearch = netease.SearchPageContext
+var openQQSongArtist = (*app).openQQArtistForSong
+
+// Resolve the recording first; a same-name singer alone is not sufficient
+// evidence to redirect an external recording to a NetEase artist page.
+func (a *app) openQQArtistForSong(song netease.Track, artist netease.Artist) {
+	from := a.route
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		if artist.SourceMID == "" {
+			rows, _ := qqmusic.Search(ctx, song.Name+" "+artist.Name, 10)
+			for _, row := range rows {
+				if sourcecatalog.NormalizeTitle(row.Name) != sourcecatalog.NormalizeTitle(song.Name) {
+					continue
+				}
+				for i, name := range row.Artists {
+					if sourcecatalog.SameArtist(name, artist.Name) && i < len(row.ArtistMIDs) {
+						artist.SourceMID = row.ArtistMIDs[i]
+						break
+					}
+				}
+				if artist.SourceMID != "" {
+					break
+				}
+			}
+		}
+		result, err := qqArtistNetEaseSearch(ctx, song.Name+" "+artist.Name, netease.SearchSongs, 20, 0)
+		var id int64
+		if err == nil {
+			for _, candidate := range result.Songs {
+				if !sameSearchRecording(song, candidate) {
+					continue
+				}
+				for _, ar := range candidate.Artists {
+					if ar.ID > 0 && sourcecatalog.SameArtist(ar.Name, artist.Name) {
+						id = ar.ID
+						break
+					}
+				}
+				if id > 0 {
+					break
+				}
+			}
+		}
+		a.post(func() {
+			if a.route != from {
+				return
+			}
+			if id > 0 {
+				a.openPage(route{page: pageArtist, id: id})
+			} else {
+				if artist.SourceMID != "" {
+					a.openPage(route{page: pageQQArtist, sourceID: artist.SourceMID, query: artist.Name})
+				} else {
+					a.toast = "未能确认该歌手的QQ音乐身份，请重试"
+					a.redraw()
+				}
+			}
+		})
+	}()
+}
+
 // link is text in a RichText that opens a page.
 func (a *app) link(c *ui.Context, text string, color, hover ui.Color, r route) {
-	link := ui.Link(c, text, "").TextColor(color)
+	a.artistActionLink(c, text, color, hover, func() { a.openPage(r) })
+}
+
+func (a *app) artistActionLink(c *ui.Context, text string, color, hover ui.Color, action func()) {
+	// Link adds its underline after input, and transparent decoration inherits
+	// the text color. Use interactive text so hover only changes its color.
+	link := ui.Text(c, text).TextColor(color).Cursor(ui.CursorPointer).Focusable()
 	if link.Hovered() {
 		link.TextColor(hover)
 	}
 	// Once built: a song's row is in a list, which a new page resets.
-	link.OnClick(func() { a.openPage(r) })
+	link.OnClick(action)
 }
 
 // openPage opens a page in the main window, from wherever a link to it

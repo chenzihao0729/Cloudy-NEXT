@@ -188,25 +188,25 @@ func (a *app) backdropCards(c *ui.Context) {
 	a.changed()
 }
 
-func (a *app) settingsNowPlayingPage(k *settingsKit) {
-	c, s := k.c, &a.settings
+func (a *app) settingsNowPlayingPage(c *ui.Context, k *settingsKit) {
+	s := &a.settings
 	effect := func(key, label string, on *bool) {
-		k.toggle(key, label, on, false, a.leavePowerSaver)
+		k.toggle(c, key, label, on, false, a.leavePowerSaver)
 	}
 	slider := func(label string, v *float64, on bool) {
-		k.sub(label, "", on, func() { a.settingSlider(c.Key(label), label, v, true, k.ink) })
+		k.sub(c, label, "", on, func() { a.settingSlider(c.Key(label), label, v, true, k.ink) })
 	}
 	if !k.probe && !k.searching {
 		a.nowPlayingPreview(c)
 	}
-	k.group("背景", func() {
-		k.block("背景 动态背景 静态 烟雾 光斑 极光 星空 深海 波纹 月夜 封面色", func() { a.backdropCards(c) })
+	k.group(c, "背景", func() {
+		k.block(c, "背景 动态背景 静态 烟雾 光斑 极光 星空 深海 波纹 月夜 封面色", func() { a.backdropCards(c) })
 		// Of the scene chosen alone: each keeps its own answer.
 		scene := backdropSceneOf(s.FogStyle)
 		_, own := sceneTints[scene.id]
-		k.sub("颜色跟随封面", "关闭时"+scene.label+"用自己的颜色；打开后用当前歌曲封面的颜色。每种背景各记各的", s.Fog && own, func() {
+		k.sub(c, "颜色跟随封面", "关闭时"+scene.label+"用自己的颜色；打开后用当前歌曲封面的颜色。每种背景各记各的", s.Fog && own, func() {
 			on := s.SceneCover[scene.id]
-			k.toggle("scene-cover-"+scene.id, scene.label+"颜色跟随封面", &on, false, func() {
+			k.toggle(c, "scene-cover-"+scene.id, scene.label+"颜色跟随封面", &on, false, func() {
 				if s.SceneCover == nil {
 					s.SceneCover = map[string]bool{}
 				}
@@ -218,18 +218,18 @@ func (a *app) settingsNowPlayingPage(k *settingsKit) {
 			})
 		})
 	})
-	k.group("光效", func() {
-		k.row("微光", "当前歌词、进度条与音量带一层柔光", func() {
+	k.group(c, "光效", func() {
+		k.row(c, "微光", "当前歌词、进度条与音量带一层柔光", func() {
 			effect("np-light", "播放页微光", &s.NpLight)
 		})
 		slider("微光强度", &s.GlowLevel, s.NpLight)
-		k.row("进度条烟雾", "进度条化作拖着烟雾的光点", func() {
+		k.row(c, "进度条烟雾", "进度条化作拖着烟雾的光点", func() {
 			effect("smoke", "进度条烟雾特效", &s.Smoke)
 		})
 	})
-	k.foot("微光给当前歌词、进度条和音量加一层柔光；进度条烟雾让进度条拖着一个发光的光点。")
-	k.group("歌词", func() {
-		k.row("歌词排版", "滚动，或当前句居中、上下沿圆弧排开的透视", func() {
+	k.foot(c, "微光给当前歌词、进度条和音量加一层柔光；进度条烟雾让进度条拖着一个发光的光点。")
+	k.group(c, "歌词", func() {
+		k.row(c, "歌词排版", "滚动，或当前句居中、上下沿圆弧排开的透视", func() {
 			i := 0
 			if s.LyricPerspective {
 				i = 1
@@ -239,74 +239,74 @@ func (a *app) settingsNowPlayingPage(k *settingsKit) {
 				a.changed()
 			}
 		})
-		k.sub("倾斜度", "0% 为直上直下", s.LyricPerspective, func() {
+		k.sub(c, "倾斜度", "0% 为直上直下", s.LyricPerspective, func() {
 			a.settingSlider(c.Key("lyric-tilt"), "倾斜度", &s.LyricTilt, s.LyricPerspective, k.ink)
 		})
-		k.sub("回弹强度", "0% 为平滑滚动", s.LyricPerspective, func() {
+		k.sub(c, "回弹强度", "0% 为平滑滚动", s.LyricPerspective, func() {
 			a.settingSlider(c.Key("lyric-bounce"), "回弹强度", &s.LyricBounce, s.LyricPerspective, k.ink)
 		})
-		k.row("模糊其余歌词", "离正在唱的一句越远越模糊", func() {
-			k.toggle("lyric-blur", "模糊其余歌词", &s.LyricBlur, false, nil)
+		k.row(c, "模糊其余歌词", "离正在唱的一句越远越模糊", func() {
+			k.toggle(c, "lyric-blur", "模糊其余歌词", &s.LyricBlur, false, nil)
 		})
 		// Only while some lyrics blur: the perspective ones always do.
 		blurs := s.LyricBlur || s.LyricPerspective
-		k.sub("模糊强度", "", blurs, func() {
+		k.sub(c, "模糊强度", "", blurs, func() {
 			a.settingSlider(c.Key("lyric-blur-level"), "模糊强度", &s.LyricBlurLevel, blurs, k.ink)
 		})
-		k.row("歌词字号", "鼠标移到播放页也能调", func() {
+		k.row(c, "歌词字号", "鼠标移到播放页也能调", func() {
 			labels, values := scaleChoices(70, 160)
-			k.choose("lyric-scale", "歌词字号", scaleLabel(s.LyricScale), labels, func(i int) {
+			k.choose(c, "lyric-scale", "歌词字号", scaleLabel(s.LyricScale), labels, func(i int) {
 				s.LyricScale = values[i]
 				a.changed()
 			})
 		})
 	})
-	k.foot("透视让当前句居中，上下的歌词沿圆弧排开。把鼠标移到播放页上，也能直接调字号。")
-	k.group("行为", func() {
-		k.row("空闲时隐藏控件", "鼠标静止 3 秒后只留封面、歌名、进度和播放键", func() {
-			k.toggle("np-calm", "播放页空闲时隐藏控件", &s.NpCalm, false, nil)
+	k.foot(c, "透视让当前句居中，上下的歌词沿圆弧排开。把鼠标移到播放页上，也能直接调字号。")
+	k.group(c, "行为", func() {
+		k.row(c, "空闲时隐藏控件", "鼠标静止 3 秒后只留封面、歌名、进度和播放键", func() {
+			k.toggle(c, "np-calm", "播放页空闲时隐藏控件", &s.NpCalm, false, nil)
 		})
 	})
-	k.foot("鼠标静止 3 秒后，只留封面、歌名、进度和播放键。")
+	k.foot(c, "鼠标静止 3 秒后，只留封面、歌名、进度和播放键。")
 }
 
-func (a *app) settingsLyricsPage(k *settingsKit) {
+func (a *app) settingsLyricsPage(c *ui.Context, k *settingsKit) {
 	s := &a.settings
-	k.group("歌词内容", func() {
-		k.row("歌词翻译", "播放栏的翻译按钮也能切换", func() {
-			k.toggle("lyric-trans", "歌词翻译", &s.LyricTrans, false, nil)
+	k.group(c, "歌词内容", func() {
+		k.row(c, "歌词翻译", "播放栏的翻译按钮也能切换", func() {
+			k.toggle(c, "lyric-trans", "歌词翻译", &s.LyricTrans, false, nil)
 		})
-		k.row("逐字高亮", "唱到哪个字亮到哪个字；关闭后整行一起亮起", func() {
+		k.row(c, "逐字高亮", "唱到哪个字亮到哪个字；关闭后整行一起亮起", func() {
 			words := !s.NpWholeLines
-			k.toggle("np-words", "逐字高亮", &words, false, func() { s.NpWholeLines = !words })
+			k.toggle(c, "np-words", "逐字高亮", &words, false, func() { s.NpWholeLines = !words })
 		})
-		k.row("其他来源逐字歌词", "网易云只有逐行歌词时，从 AMLL 歌词库或酷狗找逐字歌词", func() {
-			k.toggle("more-words", "其他来源逐字歌词", &s.MoreWords, false, func() { moreWordsOn.Store(s.MoreWords) })
+		k.row(c, "其他来源逐字歌词", "网易云只有逐行歌词时，从 AMLL 歌词库或酷狗找逐字歌词", func() {
+			k.toggle(c, "more-words", "其他来源逐字歌词", &s.MoreWords, false, func() { moreWordsOn.Store(s.MoreWords) })
 		})
-		k.row("隐藏制作信息", "不显示作词、作曲、编曲等行", func() {
-			k.toggle("hide-credits", "隐藏制作信息", &s.HideCredits, false, nil)
+		k.row(c, "隐藏制作信息", "不显示作词、作曲、编曲等行", func() {
+			k.toggle(c, "hide-credits", "隐藏制作信息", &s.HideCredits, false, nil)
 		})
-		k.row("热评模式", "歌词处换成这首歌的热门评论，一条接一条地轮换", func() {
+		k.row(c, "热评模式", "歌词处换成这首歌的热门评论，一条接一条地轮换", func() {
 			// Turned on, it shows them all along; those who had them in
 			// the quiet parts only keep that.
-			k.toggle("hot-comments", "热评模式", &s.HotComments, false, func() { s.HotAll = s.HotComments })
+			k.toggle(c, "hot-comments", "热评模式", &s.HotComments, false, func() { s.HotAll = s.HotComments })
 		})
-		k.sub("仅在间奏时显示热评", "只在前奏、间奏与尾奏时显示热评，有歌词的地方照常显示歌词", s.HotComments, func() {
+		k.sub(c, "仅在间奏时显示热评", "只在前奏、间奏与尾奏时显示热评，有歌词的地方照常显示歌词", s.HotComments, func() {
 			quiet := !s.HotAll
-			k.toggle("hot-quiet", "仅在间奏时显示热评", &quiet, false, func() { s.HotAll = !quiet })
+			k.toggle(c, "hot-quiet", "仅在间奏时显示热评", &quiet, false, func() { s.HotAll = !quiet })
 		})
 	})
-	k.foot("逐字高亮关闭后整行一起亮起。网易云只有逐行歌词时，可以从 AMLL 歌词库或酷狗找逐字歌词。热评模式把歌词换成这首歌的热门评论。")
-	k.group("律动歌词", func() {
-		k.row("高清动态文字", "提升流光、云阶歌词放大和旋转时的清晰度，可能略微增加资源占用", func() {
-			k.toggle("stage-hires", "高清动态文字", &s.StageHiRes, false, nil)
+	k.foot(c, "逐字高亮关闭后整行一起亮起。网易云只有逐行歌词时，可以从 AMLL 歌词库或酷狗找逐字歌词。热评模式把歌词换成这首歌的热门评论。")
+	k.group(c, "律动歌词", func() {
+		k.row(c, "高清动态文字", "提升流光、云阶歌词放大和旋转时的清晰度，可能略微增加资源占用", func() {
+			k.toggle(c, "stage-hires", "高清动态文字", &s.StageHiRes, false, nil)
 		})
 	})
-	k.group("桌面歌词", func() {
-		k.row("桌面歌词", "在其他窗口之上显示当前歌词", func() {
-			k.toggle("desk-lyrics", "桌面歌词", &s.DeskLyrics, false, a.applyDeskLyrics)
+	k.group(c, "桌面歌词", func() {
+		k.row(c, "桌面歌词", "在其他窗口之上显示当前歌词", func() {
+			k.toggle(c, "desk-lyrics", "桌面歌词", &s.DeskLyrics, false, a.applyDeskLyrics)
 		})
-		k.sub("样式", "鼠标移到歌词上点“样式”也能切换", s.DeskLyrics, func() {
+		k.sub(c, "样式", "鼠标移到歌词上点“样式”也能切换", s.DeskLyrics, func() {
 			labels := make([]string, len(deskStyles))
 			chosen := deskStyles[0].label
 			for i, d := range deskStyles {
@@ -315,26 +315,26 @@ func (a *app) settingsLyricsPage(k *settingsKit) {
 					chosen = d.label
 				}
 			}
-			k.choose("desk-style", "桌面歌词样式", chosen, labels, func(i int) {
+			k.choose(c, "desk-style", "桌面歌词样式", chosen, labels, func(i int) {
 				s.DeskStyle = deskStyles[i].id
 				a.changed()
 			})
 		})
-		k.sub("字号", "", s.DeskLyrics, func() {
+		k.sub(c, "字号", "", s.DeskLyrics, func() {
 			labels, values := scaleChoices(70, 130)
-			k.choose("desk-scale", "桌面歌词字号", scaleLabel(s.DeskScale), labels, func(i int) {
+			k.choose(c, "desk-scale", "桌面歌词字号", scaleLabel(s.DeskScale), labels, func(i int) {
 				s.DeskScale = values[i]
 				a.changed()
 			})
 		})
-		k.sub("锁定", "鼠标穿过歌词，不挡住下面的内容", s.DeskLyrics, func() {
-			k.toggle("desk-lock", "锁定桌面歌词", &s.DeskLock, false, a.applyDeskLyrics)
+		k.sub(c, "锁定", "鼠标穿过歌词，不挡住下面的内容", s.DeskLyrics, func() {
+			k.toggle(c, "desk-lock", "锁定桌面歌词", &s.DeskLock, false, a.applyDeskLyrics)
 		})
-		k.sub("逐字高亮", "", s.DeskLyrics, func() {
-			k.toggle("desk-words", "逐字高亮", &s.DeskWords, false, nil)
+		k.sub(c, "逐字高亮", "", s.DeskLyrics, func() {
+			k.toggle(c, "desk-words", "逐字高亮", &s.DeskWords, false, nil)
 		})
 	})
-	k.foot("桌面歌词浮在其他窗口之上；锁定后鼠标会穿过它，不挡住下面的内容。")
+	k.foot(c, "桌面歌词浮在其他窗口之上；锁定后鼠标会穿过它，不挡住下面的内容。")
 }
 
 // The materials the window is made of, as presets of the five switches
@@ -346,18 +346,17 @@ const (
 	materialGlass
 )
 
-// material returns the preset the settings are at, or -1 for a mix of
-// its own.
+// material identifies the main surface preset. Partial cover effects retain
+// the flat preset; panel glass is independent of the selected card.
 func (s *settings) material() int {
 	switch {
 	case s.GlobalGlass:
 		return materialGlass
-	case s.SidebarGlass && s.MainGlass && s.LiquidGlass && s.GlassPanels:
+	case s.SidebarGlass && s.MainGlass && s.LiquidGlass:
 		return materialCover
-	case !s.SidebarGlass && !s.MainGlass && !s.LiquidGlass && !s.GlassPanels:
+	default:
 		return materialFlat
 	}
-	return -1
 }
 
 // materialThumb paints the picture of a material: a window, its
@@ -394,18 +393,18 @@ func materialThumb(p *ui.Painter, r ui.Rect, kind int, tint ui.Color, dark bool)
 
 // materialGroup chooses the window's material: a preset, or under
 // 自定义 each part of it.
-func (a *app) materialGroup(k *settingsKit) {
-	c, s := k.c, &a.settings
+func (a *app) materialGroup(c *ui.Context, k *settingsKit) {
+	s := &a.settings
 	sv := &a.settingsView
-	k.group("材质", func() {
-		k.block("材质 纯色 封面色 液态玻璃 玻璃 背景", func() {
+	k.group(c, "材质", func() {
+		k.block(c, "材质 纯色 封面色 液态玻璃 玻璃 背景", func() {
 			tint, dark := a.thumbTint(), a.pal.dark
 			picked, ok := a.choiceCards(c, "material-cards", "材质", []string{"纯色", "封面色", "液态玻璃"}, s.material(), 3, func(i int) {
 				ui.Box(c.Key("material")).Height(thumbHeight).Draw(func(p *ui.Painter, r ui.Rect) {
 					materialThumb(p, r, i, tint, dark)
 				})
 			})
-			if !ok || picked == s.material() {
+			if !ok {
 				return
 			}
 			switch picked {
@@ -425,15 +424,15 @@ func (a *app) materialGroup(k *settingsKit) {
 			a.changed()
 		})
 		open := sv.materialOpen
-		k.row("自定义", "分别设置侧栏、主界面、播放栏和弹窗", func() {
-			if k.disclosure("material-custom", "自定义材质", open).Clicked() {
+		k.row(c, "自定义", "分别设置侧栏、主界面、播放栏和弹窗", func() {
+			if k.disclosure(c, "material-custom", "自定义材质", open).Clicked() {
 				sv.materialOpen = !open
 				a.redraw()
 			}
 		})
 		// What it opens: in a drawer, but as rows where a search looks.
 		parts := func() {
-			k.sub("全局液态玻璃", "通透的封面色背景，播放栏、菜单和对话框用折射玻璃", true, func() {
+			k.sub(c, "全局液态玻璃", "通透的封面色背景，播放栏、菜单和对话框用折射玻璃", true, func() {
 				on := s.GlobalGlass
 				if settingSwitch(c.Key("global-glass"), &on).Label("切换全局液态玻璃").Changed() {
 					if on {
@@ -447,10 +446,10 @@ func (a *app) materialGroup(k *settingsKit) {
 			part := func(key, label string, stored *bool, after func()) {
 				if s.GlobalGlass {
 					on := true
-					k.toggle(key, label, &on, true, nil)
+					k.toggle(c, key, label, &on, true, nil)
 					return
 				}
-				k.toggle(key, label, stored, false, after)
+				k.toggle(c, key, label, stored, false, after)
 			}
 			// The cover's colors take the place of the accent chosen: said, in a
 			// toast, as either is turned on.
@@ -462,23 +461,23 @@ func (a *app) materialGroup(k *settingsKit) {
 					}
 				}
 			}
-			k.sub("侧栏封面色背景", "透出当前歌曲封面的颜色", true, func() {
+			k.sub(c, "侧栏封面色背景", "透出当前歌曲封面的颜色", true, func() {
 				part("sidebar-glass", "侧栏封面色背景", &s.SidebarGlass, coverOn(&s.SidebarGlass))
 			})
-			k.sub("主界面封面色背景", "", true, func() {
+			k.sub(c, "主界面封面色背景", "", true, func() {
 				part("main-glass", "主界面封面色背景", &s.MainGlass, coverOn(&s.MainGlass))
 			})
-			k.sub("液态玻璃播放栏", "悬浮的玻璃胶囊，折射其下的内容", true, func() {
+			k.sub(c, "液态玻璃播放栏", "悬浮的玻璃胶囊，折射其下的内容", true, func() {
 				part("liquid-glass", "液态玻璃播放栏", &s.LiquidGlass, a.leavePowerSaver)
 			})
-			k.sub("界面玻璃", "菜单、弹窗和设置面板使用玻璃材质", true, func() {
+			k.sub(c, "界面玻璃", "菜单、弹窗和设置面板使用玻璃材质", true, func() {
 				part("glass-panels", "界面玻璃", &s.GlassPanels, a.leavePowerSaver)
 			})
 			refractive := s.playerGlass() || s.GlobalGlass
-			k.sub("玻璃透明度", "", refractive, func() {
+			k.sub(c, "玻璃透明度", "", refractive, func() {
 				a.settingSlider(c.Key("玻璃透明度"), "玻璃透明度", &s.GlassClear, true, k.ink)
 			})
-			k.sub("折射强度", "", refractive, func() {
+			k.sub(c, "折射强度", "", refractive, func() {
 				a.settingSlider(c.Key("折射强度"), "折射强度", &s.GlassBend, true, k.ink)
 			})
 		}
@@ -487,22 +486,22 @@ func (a *app) materialGroup(k *settingsKit) {
 		} else {
 			drawer(c, "material-parts", open, parts)
 		}
-		k.row("省电模式", "一键关闭玻璃、封面旋转、微光和动态背景；再关一次恢复原样", func() {
+		k.row(c, "省电模式", "一键关闭玻璃、封面旋转、微光和动态背景；再关一次恢复原样", func() {
 			on := s.PowerSaver
 			if settingSwitch(c.Key("power-saver"), &on).Label("省电模式").Changed() {
 				a.setPowerSaver(on)
 			}
 		})
 	})
-	k.foot("省电模式会一键关闭玻璃、封面旋转、微光和动态背景；再关一次恢复原样。")
+	k.foot(c, "省电模式会一键关闭玻璃、封面旋转、微光和动态背景；再关一次恢复原样。")
 }
 
-func (a *app) settingsAppearancePage(k *settingsKit) {
-	c, s := k.c, &a.settings
-	a.settingsThemeGroup(k)
-	a.materialGroup(k)
-	k.group("动效", func() {
-		k.row("界面动画", "精简时只保留淡入淡出", func() {
+func (a *app) settingsAppearancePage(c *ui.Context, k *settingsKit) {
+	s := &a.settings
+	a.settingsThemeGroup(c, k)
+	a.materialGroup(c, k)
+	k.group(c, "动效", func() {
+		k.row(c, "界面动画", "精简时只保留淡入淡出", func() {
 			modes := []string{"", "lite", "off"}
 			i := 0
 			for k, m := range modes {
@@ -515,15 +514,15 @@ func (a *app) settingsAppearancePage(k *settingsKit) {
 				a.changed()
 			}
 		})
-		k.row("封面旋转", "播放时播放栏里的封面像黑胶一样转动", func() {
-			k.toggle("bar-spin", "播放栏封面旋转", &s.BarSpin, false, a.leavePowerSaver)
+		k.row(c, "封面旋转", "播放时播放栏里的封面像黑胶一样转动", func() {
+			k.toggle(c, "bar-spin", "播放栏封面旋转", &s.BarSpin, false, a.leavePowerSaver)
 		})
 	})
-	k.foot("精简时界面动画只保留淡入淡出。封面旋转是播放栏里的封面像黑胶一样转动。")
-	k.group("文字", func() {
-		k.row("界面缩放", "也可以按 Ctrl 加 + 或 - 调整，Ctrl 加 0 恢复", func() {
+	k.foot(c, "精简时界面动画只保留淡入淡出。封面旋转是播放栏里的封面像黑胶一样转动。")
+	k.group(c, "文字", func() {
+		k.row(c, "界面缩放", "也可以按 Ctrl 加 + 或 - 调整，Ctrl 加 0 恢复", func() {
 			labels, values := scaleChoices(80, 200)
-			k.choose("ui-zoom", "界面缩放", scaleLabel(s.UIZoom), labels, func(i int) {
+			k.choose(c, "ui-zoom", "界面缩放", scaleLabel(s.UIZoom), labels, func(i int) {
 				s.UIZoom = values[i]
 				if s.UIZoom == 1 {
 					s.UIZoom = 0
@@ -535,32 +534,31 @@ func (a *app) settingsAppearancePage(k *settingsKit) {
 	})
 }
 
-func (a *app) settingsHomePage(k *settingsKit) {
+func (a *app) settingsHomePage(c *ui.Context, k *settingsKit) {
 	s := &a.settings
-	a.deckSettings(k)
-	k.group("侧边栏", func() {
-		k.rowOf(settingRow{label: "侧边栏大小", desc: "歌单、专辑的封面和文字大小",
+	a.deckSettings(c, k)
+	k.group(c, "侧边栏", func() {
+		k.rowOf(c, settingRow{label: "侧边栏大小", desc: "歌单、专辑的封面和文字大小",
 			tip: "拖动侧边栏右边缘可以调整宽度，双击边缘恢复"}, func() {
 			labels := make([]string, len(sidebarSizes))
 			for i, sz := range sidebarSizes {
 				labels[i] = sz.label
 			}
-			k.choose("sidebar-size", "侧边栏大小", a.sidebarSizeLabel(), labels, func(i int) {
+			k.choose(c, "sidebar-size", "侧边栏大小", a.sidebarSizeLabel(), labels, func(i int) {
 				s.SidebarSize = sidebarSizes[i].id
 				a.changed()
 			})
 		})
-		k.row("列出全部歌单", "关闭时每组只列出前 8 个，其余在「我的主页」里", func() {
-			k.toggle("sidebar-all", "侧边栏列出全部歌单", &s.SidebarAll, false, nil)
+		k.row(c, "列出全部歌单", "关闭时每组只列出前 8 个，其余在「我的主页」里", func() {
+			k.toggle(c, "sidebar-all", "侧边栏列出全部歌单", &s.SidebarAll, false, nil)
 		})
 	})
-	k.foot("关闭「列出全部歌单」时每组只列前 8 个，其余在「我的主页」里。拖动侧边栏右边缘可以调整宽度。")
+	k.foot(c, "关闭「列出全部歌单」时每组只列前 8 个，其余在「我的主页」里。拖动侧边栏右边缘可以调整宽度。")
 }
 
 // disclosure is the arrow at the end of a row that opens what is under
 // it: pointing at it while closed, and down once open.
-func (k *settingsKit) disclosure(key, label string, open bool) ui.Element {
-	c := k.c
+func (k *settingsKit) disclosure(c *ui.Context, key, label string, open bool) ui.Element {
 	b := ui.ButtonBase(c.Key(key)).Size(30, 30).Radius(999).Center().Shrink(0).FocusRing(false).Role(ui.RoleDisclosure).Label(label)
 	b.Expanded(open)
 	bg := ui.Color{}

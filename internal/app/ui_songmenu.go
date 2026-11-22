@@ -21,6 +21,13 @@ var copyText = func(text string) error { return mygo.Clipboard.Write(transfer.Te
 func (a *app) songActions(tr *netease.Track, pid int64) [][]menuAction {
 	// A file put in the folder by hand is no NetEase song: only its file
 	// can be acted on. A downloaded song is still one, with its file too.
+	if tr.Source != nil {
+		song := *tr
+		return [][]menuAction{{{label: "下一首播放", icon: iconNext, do: func() { a.playNext([]netease.Track{song}) }}}, {
+			{label: "复制歌名", icon: iconCopy, do: func() { copyText(song.Name) }},
+			{label: "复制歌名和歌手", icon: iconCopy, do: func() { copyText(song.Name + " - " + song.ArtistNames()) }},
+		}}
+	}
 	if tr.LocalPath != "" && tr.ID <= 0 {
 		return a.withCoverAction(a.downloadedSongActions(tr), tr)
 	}

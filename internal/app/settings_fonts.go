@@ -8,10 +8,10 @@ const followUIFont = "跟随界面字体"
 // fontRows are the settings of the app's font and the lyrics'.
 func (a *app) fontRows(c *ui.Context, k *settingsKit) {
 	s := &a.settings
-	k.row("界面字体", "界面与评论使用的字体", func() {
+	k.row(c, "界面字体", "界面与评论使用的字体", func() {
 		a.fontSelect(c, "font", "界面字体", &s.Font, false)
 	})
-	k.row("歌词字体", "播放页歌词与桌面歌词使用的字体，默认跟随界面字体", func() {
+	k.row(c, "歌词字体", "播放页歌词与桌面歌词使用的字体，默认跟随界面字体", func() {
 		a.fontSelect(c, "lyric-font", "歌词字体", &s.LyricFont, true)
 	})
 }

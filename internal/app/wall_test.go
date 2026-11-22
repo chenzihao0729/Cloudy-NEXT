@@ -47,7 +47,7 @@ func find(t *testing.T, tt *ui.Tester, s string) ui.Rect {
 	return r
 }
 
-// A click on a cover plays its song; a drag that starts on one moves the
+// A double click on a cover plays its song; a drag that starts on one moves the
 // wall and plays nothing.
 func TestWallPlaysTheCoverClicked(t *testing.T) {
 	a, tt := wallApp(t, 300, 0)
@@ -62,13 +62,16 @@ func TestWallPlaysTheCoverClicked(t *testing.T) {
 	if err := tt.Click("歌005"); err != nil {
 		t.Fatal(err)
 	}
+	if err := tt.Click("歌005"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
 	if got := a.pl.Current().Name; got != "歌005" {
 		t.Errorf("playing %s, want 歌005", got)
 	}
 }
 
-// While the song plays, the rows sway, and a click plays the cover where
+// While the song plays, the rows sway, and a double click plays the cover where
 // it shows, not where it would rest: near its edge, which is far from
 // where its row rests.
 func TestWallPlaysTheCoverSwaying(t *testing.T) {
@@ -86,6 +89,7 @@ func TestWallPlaysTheCoverSwaying(t *testing.T) {
 		if sway > 0 {
 			x = r.X + r.W - 4
 		}
+		tt.ClickAt(x, r.Y+r.H/2)
 		tt.ClickAt(x, r.Y+r.H/2)
 		tt.Frame()
 		if got := a.pl.Current().Name; got != "歌005" {

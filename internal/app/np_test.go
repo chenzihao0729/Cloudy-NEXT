@@ -151,6 +151,9 @@ func TestQueueStaysAsATrackIsPlayed(t *testing.T) {
 	if err := tt.Click("歌05"); err != nil {
 		t.Fatal(err)
 	}
+	if err := tt.Click("歌05"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
 	tt.Frame()
 	if got := a.pl.Current().Name; got != "歌05" {

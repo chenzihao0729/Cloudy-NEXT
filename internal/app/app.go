@@ -12,6 +12,7 @@ import (
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/qqmusic"
+	"netease-music-mygo/internal/sourcecatalog"
 	"netease-music-mygo/resources"
 )
 
@@ -37,9 +38,13 @@ const (
 	pageWeek  // 本周听歌排行, the songs played most in the last seven days
 	// pageHistoryDaily shows the past daily recommendations NetEase keeps.
 	pageHistoryDaily
+	pageQQArtist
+	pageQQAlbum
 )
 
 type route struct {
+	sourceID string
+
 	page pageKind
 	// id is the playlist, artist, album, user or podcast the page shows.
 	id int64
@@ -51,6 +56,9 @@ type route struct {
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
+	qqArtists map[string]*qqArtistData
+	qqAlbums  map[string]*qqAlbumData
+
 	savingCover bool // a cover fetch or save dialog is already in progress
 
 	win   *mygo.Window
@@ -199,7 +207,7 @@ type app struct {
 
 	volume      float64
 	volumeOpen  bool        // the volume popover of the player bar shows
-	volumeHover hoverOpen   // how the pointer opened it, and when it last was over it
+	volumeHover hoverOpen   // whether the pointer opened it
 	effects     effectsView // the pane of the sound effects
 	auto        autoState   // the effects chosen for the song playing
 	mutedFrom   float64
@@ -427,6 +435,13 @@ func Run() error {
 			return text
 		}
 		a.pl.FallbackCover = qqmusic.Cover
+		a.pl.SourceLyrics = func(ctx context.Context, platform, id string) string {
+			text, err := sourcecatalog.Lyrics(ctx, platform, id)
+			if err != nil {
+				return ""
+			}
+			return text
+		}
 		a.noteDownloadsAtStart()
 		a.pl.Listened = func(t netease.Track, played time.Duration, ended bool) {
 			a.listened(t, played, ended)

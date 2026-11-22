@@ -68,6 +68,11 @@ func defaultAppFolder() string {
 	exe, err := os.Executable()
 	if err == nil {
 		if dir := filepath.Dir(exe); dir != "" {
+			if mygo.IsDev() {
+				// MyGo removes non-build entries beside the dev executable on
+				// every rebuild. Keep mutable files outside dev/<platform>.
+				return filepath.Join(filepath.Dir(filepath.Dir(dir)), "runtime")
+			}
 			return dir
 		}
 	}
@@ -80,6 +85,14 @@ func useInstallData() {
 	root := defaultAppFolder()
 	data := filepath.Join(root, "Data")
 	cache := filepath.Join(root, "Cache")
+	if mygo.IsDev() {
+		if exe, err := os.Executable(); err == nil {
+			_ = os.MkdirAll(data, 0700)
+			_ = os.MkdirAll(cache, 0700)
+			moveDir(filepath.Join(filepath.Dir(exe), "Data"), data)
+			moveDir(filepath.Join(filepath.Dir(exe), "Cache"), cache)
+		}
+	}
 	oldData, dataErr := mygo.App.Path(mygo.PathUserData)
 	oldCache, cacheErr := mygo.App.Path(mygo.PathCache)
 	if dataErr == nil && oldData != data && dirEmptyOrMissing(data) {

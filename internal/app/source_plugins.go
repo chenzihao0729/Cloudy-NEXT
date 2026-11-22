@@ -39,6 +39,9 @@ type sourceLogEntry struct {
 func newSourceManager() *sourceManager { return &sourceManager{} }
 
 func (a *app) preferSource(track netease.Track) bool {
+	if track.Source != nil {
+		return a.source != nil && a.source.isEnabled()
+	}
 	if track.NoCopyright() {
 		return a.source != nil && a.source.isEnabled()
 	}
@@ -53,6 +56,9 @@ func (a *app) canUseVIPSource() bool {
 }
 
 func (a *app) canPlayTrack(track netease.Track) bool {
+	if track.Source != nil {
+		return a.source != nil && a.source.isEnabled()
+	}
 	if track.Playable() || track.LocalPath != "" || (track.ID > 0 && a.downloaded(track.ID)) {
 		return true
 	}
@@ -135,6 +141,10 @@ func (m *sourceManager) Resolve(ctx context.Context, track netease.Track, level 
 	}
 	m.mu.RUnlock()
 	platforms := []string{"wy", "tx", "kg", "kw", "mg", "qs"}
+	refs := searchTrackSources(track)
+	if track.Source != nil {
+		platforms = slices.DeleteFunc(platforms, func(p string) bool { return p == "wy" })
+	}
 	var failures []string
 	for _, platform := range platforms {
 		if _, exists := sources[platform]; !exists {
@@ -147,7 +157,17 @@ func (m *sourceManager) Resolve(ctx context.Context, track netease.Track, level 
 			return nil, err
 		}
 		var matched sourcecatalog.Song
-		if platform == "wy" {
+		var direct *netease.SourceTrack
+		for i := range refs {
+			if refs[i].Platform == platform {
+				direct = &refs[i]
+				break
+			}
+		}
+		if direct != nil {
+			ref := direct
+			matched = sourcecatalog.Song{ID: ref.ID, MID: ref.MID, MediaMID: ref.MediaMID, Hash: ref.Hash, Name: track.Name, Artists: trackArtistNames(track), Album: track.Album.Name, Duration: track.Length(), CoverURL: track.Album.PicURL}
+		} else if platform == "wy" {
 			matched = sourcecatalog.Song{ID: fmt.Sprint(track.ID), Name: track.Name, Artists: trackArtistNames(track), Album: track.Album.Name, Duration: track.Length()}
 			m.addLog("info", "网易云：尝试原曲 ID "+matched.ID)
 		} else {
@@ -186,6 +206,10 @@ func (m *sourceManager) Resolve(ctx context.Context, track netease.Track, level 
 		}
 		m.addLog("info", sources[platform]+"：插件已返回播放地址")
 		source := platform
+		sourceID := matched.ID
+		if platform == "kg" && matched.Hash != "" {
+			sourceID = matched.Hash
+		}
 		referers := map[string]string{
 			"tx": "https://y.qq.com/",
 			"kg": "https://www.kugou.com/",
@@ -202,7 +226,7 @@ func (m *sourceManager) Resolve(ctx context.Context, track netease.Track, level 
 		}
 		return &netease.Stream{
 			URL: streamURL, Type: streamType, Level: streamLevel,
-			Source: source, SourceID: matched.ID, CoverURL: matched.CoverURL, Referer: referers[platform], UserAgent: userAgents[platform],
+			Source: source, SourceID: sourceID, CoverURL: matched.CoverURL, Referer: referers[platform], UserAgent: userAgents[platform],
 		}, nil
 	}
 	if len(failures) == 0 {

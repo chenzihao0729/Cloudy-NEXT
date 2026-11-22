@@ -597,16 +597,15 @@ func (a *app) deckSummary() string {
 
 // deckSettings is the calendar's group in the settings: a row naming what
 // it holds, whose button opens a drawer under it to change that.
-func (a *app) deckSettings(k *settingsKit) {
-	c := k.c
-	k.group("首页台历", func() {
+func (a *app) deckSettings(c *ui.Context, k *settingsKit) {
+	k.group(c, "首页台历", func() {
 		open := a.deckDrawer
-		k.row("台历内容", a.deckSummary(), func() {
+		k.row(c, "台历内容", a.deckSummary(), func() {
 			label := "管理"
 			if open {
 				label = "收起"
 			}
-			if k.disclosure("deck-manage", label+"台历内容", open).Clicked() {
+			if k.disclosure(c, "deck-manage", label+"台历内容", open).Clicked() {
 				a.deckDrawer = !open
 			}
 		})

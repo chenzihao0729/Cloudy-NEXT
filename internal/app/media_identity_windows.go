@@ -4,6 +4,7 @@ package app
 
 import (
 	"fmt"
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -40,23 +41,23 @@ func setWindowsMediaAppID(hwnd uintptr, appName string) error {
 		return fmt.Errorf("could not create SystemMediaTransportControls class name")
 	}
 	defer mediaDeleteString.Call(className)
-	var factory uintptr
+	var factory *mediaObject
 	hr, _, _ := mediaGetActivation.Call(className, uintptr(unsafe.Pointer(&mediaControlsInteropIID)), uintptr(unsafe.Pointer(&factory)))
-	if int32(hr) < 0 || factory == 0 {
+	if int32(hr) < 0 || factory == nil {
 		return fmt.Errorf("RoGetActivationFactory failed: 0x%08x", uint32(hr))
 	}
 	defer mediaRelease(factory)
 
-	var controls uintptr
+	var controls *mediaObject
 	hr = mediaCall(factory, mediaInteropGetForWindow, hwnd, uintptr(unsafe.Pointer(&mediaControlsIID)), uintptr(unsafe.Pointer(&controls)))
-	if int32(hr) < 0 || controls == 0 {
+	if int32(hr) < 0 || controls == nil {
 		return fmt.Errorf("GetForWindow failed: 0x%08x", uint32(hr))
 	}
 	defer mediaRelease(controls)
 
-	var updater uintptr
+	var updater *mediaObject
 	hr = mediaCall(controls, mediaGetDisplayUpdater, uintptr(unsafe.Pointer(&updater)))
-	if int32(hr) < 0 || updater == 0 {
+	if int32(hr) < 0 || updater == nil {
 		return fmt.Errorf("getting media display updater failed: 0x%08x", uint32(hr))
 	}
 	defer mediaRelease(updater)
@@ -89,18 +90,22 @@ func mediaHString(value string) uintptr {
 	return hstring
 }
 
-func mediaCall(object uintptr, method uintptr, args ...uintptr) uintptr {
-	vtable := *(*uintptr)(unsafe.Pointer(object))
-	function := *(*uintptr)(unsafe.Pointer(vtable + method*unsafe.Sizeof(uintptr(0))))
+// Keep COM interface pointers typed until they cross the syscall boundary.
+type mediaObject struct{ vtable *[18]uintptr }
+
+//go:uintptrescapes
+func mediaCall(object *mediaObject, method uintptr, args ...uintptr) uintptr {
+	function := object.vtable[method]
 	callArgs := make([]uintptr, 1, len(args)+1)
-	callArgs[0] = object
+	callArgs[0] = uintptr(unsafe.Pointer(object))
 	callArgs = append(callArgs, args...)
 	r, _, _ := syscall.SyscallN(function, callArgs...)
+	runtime.KeepAlive(object)
 	return r
 }
 
-func mediaRelease(object uintptr) {
-	if object != 0 {
+func mediaRelease(object *mediaObject) {
+	if object != nil {
 		mediaCall(object, 2)
 	}
 }

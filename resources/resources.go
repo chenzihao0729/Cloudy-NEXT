@@ -14,6 +14,10 @@ import (
 //go:embed amicon.png
 var Icon []byte
 
+// RoundIcon is the circular logo used inside the application.
+//go:embed amicon-c.png
+var RoundIcon []byte
+
 // TrayIcon is Icon at the native 16-point, 2x tray size.
 var TrayIcon = makeTrayIcon()
 

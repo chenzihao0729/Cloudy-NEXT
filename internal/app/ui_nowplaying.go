@@ -194,11 +194,15 @@ func (a *app) nowPlayingView(c *ui.Context) {
 
 func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, accent ui.Color, w, h float32, pointerIn bool, calm float32) {
 	pl := a.pl
-	a.commentsFor(tr)
+	if commentable(tr) {
+		a.commentsFor(tr)
+	}
 	a.npSpot = flightSpot{radius: 14, track: white.Alpha(0.18), fill: white.Alpha(0.9), smoke: accent.Mix(white, 0.35)}
 	// An episode has what it is about and its captions in place of lyrics;
 	// a song, lyrics in place of those.
 	switch program := tr.ProgramID != 0; {
+	case a.npPane == paneComments && !commentable(tr):
+		a.npPane = a.lyricsPaneChosen()
 	case program && (a.npPane == paneWall || a.npPane == paneWiki):
 		a.npPane = paneQueue
 	case program && (a.npPane == paneLyrics || a.npPane == paneStage):
@@ -395,7 +399,6 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 						ui.Row(c.Key("np-actions")).Padding(gap, 0, 10, 0).Margin(0, -6, 0, -6).Gap(14).AlignItems(ui.Center).Children(func() {
 							actions(20)
 							ui.Spacer(c)
-							a.songMenu(c.Key("more"), tr, 20, white.Alpha(0.7))
 						})
 					})
 					// Folded, what plays keeps some room under it.
@@ -405,7 +408,6 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 						infoEl = ui.Column(c.Key("np-info")).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(info)
 						npFade(ui.Row(c.Key("np-actions")).Gap(8).AlignItems(ui.Center), npCalmFade(calm)).Children(func() {
 							actions(22)
-							a.songMenu(c.Key("more"), tr, 22, white.Alpha(0.7)).Margin(0, -8, 0, 0)
 						})
 					})
 				}
@@ -437,7 +439,9 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				a.npFold(c, "np-transport", calm, func() {
 					ui.Box(c).Padding(14, 0, 18, 0).Children(func() {
 						a.playFlies = a.flown
-						a.transport(c, white, white.Alpha(0.45), accent, 28)
+						a.transportRow(c, white, white.Alpha(0.45), accent, 28, false, func() {
+							a.songMenu(c.Key("more"), tr, 28*0.62, white.Alpha(0.7))
+						})
 						a.playFlies = nil
 						a.npSpot.play = a.playSpot
 					})
@@ -627,7 +631,10 @@ func (a *app) npTabs() []npTab {
 		}
 		return append(tabs, npTab{paneQueue, "待播清单"}, npTab{paneComments, "评论"})
 	}
-	tabs := []npTab{{paneLyrics, "歌词"}, {paneStage, "律动"}, {paneQueue, "待播清单"}, {paneWall, "选歌"}, {paneComments, "评论"}}
+	tabs := []npTab{{paneLyrics, "歌词"}, {paneStage, "律动"}, {paneQueue, "待播清单"}, {paneWall, "选歌"}}
+	if commentable(a.pl.Current()) {
+		tabs = append(tabs, npTab{paneComments, "评论"})
+	}
 	if wikiShown(a.pl.Current()) {
 		tabs = append(tabs, npTab{paneWiki, "百科"})
 	}

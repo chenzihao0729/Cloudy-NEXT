@@ -124,6 +124,9 @@ func TestNowPlayingRestoresHiddenPlaylist(t *testing.T) {
 			if err := tt.Click(name); err != nil {
 				t.Fatal(err)
 			}
+			if err := tt.Click(name); err != nil {
+				t.Fatal(err)
+			}
 			tt.Frame()
 			if a.pl.Current().Name != name {
 				t.Fatalf("clicked %s, playing %s", name, a.pl.Current().Name)

@@ -37,7 +37,9 @@ func (a *app) npVolume(c *ui.Context, size float32, color, track, digits ui.Colo
 	slider := max(60, width-speaker-gap)
 	now := c.Now()
 	moved := func() { a.more.volumeAt = now }
-	row := ui.Row(c.Key("np-volume")).Width(width).Gap(gap).AlignItems(ui.Center).AlignSelf(ui.Center)
+	// The 16px speaker sits in a 32px button. Its invisible left padding
+	// moves the visible group's center 4px right of the layout center.
+	row := ui.Row(c.Key("np-volume")).Width(width).Gap(gap).AlignItems(ui.Center).AlignSelf(ui.Center).Translate(-4, 0)
 	row.HandleInput(func(ev ui.InputEvent) bool {
 		if a.scrollVolume(ev) {
 			moved()

@@ -29,8 +29,9 @@ const UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/6
 var httpClient = &http.Client{Timeout: 20 * time.Second}
 
 type Artist struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	SourceMID string `json:"sourceMID,omitempty"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
 }
 
 type Album struct {
@@ -39,13 +40,29 @@ type Album struct {
 	PicURL string `json:"picUrl"`
 }
 
+// SourceTrack retains an external song's provider identity across saved queues.
+type SourceTrack struct {
+	AlbumMID    string `json:"albumMid,omitempty"`
+	SearchOrder int    `json:"searchOrder,omitempty"`
+	IsCover     bool   `json:"isCover,omitempty"`
+	LyricURL    string `json:"lyricURL,omitempty"`
+	Platform    string `json:"platform"`
+	ID          string `json:"id"`
+	MID         string `json:"mid,omitempty"`
+	MediaMID    string `json:"mediaMid,omitempty"`
+	Hash        string `json:"hash,omitempty"`
+}
+
 type Track struct {
-	ID       int64    `json:"id"`
-	Name     string   `json:"name"`
-	Artists  []Artist `json:"ar"`
-	Album    Album    `json:"al"`
-	Duration int64    `json:"dt"` // milliseconds
-	Fee      int      `json:"fee"`
+	SearchOrder int           `json:"-"`
+	Sources     []SourceTrack `json:"sourceAlternatives,omitempty"`
+	Source      *SourceTrack  `json:"sourceTrack,omitempty"`
+	ID          int64         `json:"id"`
+	Name        string        `json:"name"`
+	Artists     []Artist      `json:"ar"`
+	Album       Album         `json:"al"`
+	Duration    int64         `json:"dt"` // milliseconds
+	Fee         int           `json:"fee"`
 	// No and Cd are where the track sits in its album: its number, and
 	// the disc's; 0 where unknown.
 	No    Num      `json:"no,omitempty"`
@@ -798,7 +815,29 @@ func Sized(pic string, n int) string {
 		return pic
 	}
 	pic = strings.Replace(pic, "http://", "https://", 1)
-	return fmt.Sprintf("%s?param=%dy%d", pic, n, n)
+	u, err := url.Parse(pic)
+	if err != nil || n <= 0 {
+		return pic
+	}
+	host := strings.ToLower(u.Hostname())
+	if strings.HasSuffix(host, "music.126.net") {
+		q := u.Query()
+		q.Set("param", fmt.Sprintf("%dy%d", n, n))
+		u.RawQuery = q.Encode()
+	} else if host == "y.gtimg.cn" {
+		// QQ serves fixed-size album variants; 150px is sufficient for list rows.
+		size := "300"
+		if n <= 150 {
+			size = "150"
+		}
+		if n > 300 {
+			size = "500"
+		}
+		for _, old := range []string{"150", "300", "500", "800"} {
+			u.Path = strings.Replace(u.Path, "T002R"+old+"x"+old, "T002R"+size+"x"+size, 1)
+		}
+	}
+	return u.String()
 }
 
 // localSizeMark parts a local cover's path from the size Sized asked for,
@@ -819,11 +858,16 @@ func LocalSize(raw string) (string, int) {
 // Fetch returns what is at raw, a cover the image CDN serves or a local
 // file, whole, whatever the size Sized asked for.
 func Fetch(raw string) ([]byte, error) {
+	return FetchContext(context.Background(), raw)
+}
+
+// FetchContext bounds image network work and permits cancellation.
+func FetchContext(ctx context.Context, raw string) ([]byte, error) {
 	raw, _ = LocalSize(raw)
 	if path, ok := localPath(raw); ok {
 		return os.ReadFile(path)
 	}
-	req, err := http.NewRequest("GET", raw, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", raw, nil)
 	if err != nil {
 		return nil, err
 	}

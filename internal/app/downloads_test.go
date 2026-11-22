@@ -93,7 +93,7 @@ func TestDownloadFromSongMenu(t *testing.T) {
 	a.cancelDownload()
 }
 
-// A click on a downloaded song plays its file, and the page shows the songs
+// A double click on a downloaded song plays its file, and the page shows the songs
 // saved even when NetEase would no longer say they are playable.
 func TestDownloadedSongPlays(t *testing.T) {
 	path, err := filepath.Abs(filepath.Join("..", "player", "testdata", "seek.mp3"))
@@ -114,6 +114,12 @@ func TestDownloadedSongPlays(t *testing.T) {
 	a.open(route{page: pageDownloads})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
+	if err := tt.Click("下载测试"); err != nil {
+		t.Fatal(err)
+	}
+	if a.pl.Current() != nil {
+		t.Fatal("a single click started playback")
+	}
 	if err := tt.Click("下载测试"); err != nil {
 		t.Fatal(err)
 	}

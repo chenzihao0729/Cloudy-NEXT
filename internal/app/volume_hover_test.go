@@ -2,14 +2,13 @@ package app
 
 import (
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 	"netease-music-mygo/internal/netease"
 )
 
 // The volume opens as the pointer comes over the speaker, which shows that
-// the wheel there turns it, and closes a moment after it leaves. A click
+// the wheel there turns it, and closes immediately after it leaves. A click
 // mutes, and another brings back the volume it had.
 func TestVolumeOpensOnHover(t *testing.T) {
 	a := newTestApp()
@@ -27,11 +26,6 @@ func TestVolumeOpensOnHover(t *testing.T) {
 		t.Fatal("the pointer over the speaker did not open the volume")
 	}
 	tt.Move(20, 400)
-	tt.Frame()
-	if !a.volumeOpen {
-		t.Fatal("it closed at once, before the pointer could reach it")
-	}
-	tt.Advance(time.Second)
 	tt.Frame()
 	if a.volumeOpen {
 		t.Fatal("it stayed open after the pointer left")
