@@ -264,6 +264,10 @@ func TestHomeCalendar(t *testing.T) {
 	if a.deck.flipping || !tt.HasText("R&B · 欧美流行") || !tt.HasText("Japanese Denim") {
 		t.Fatalf("flipping %v; want the styles and the songs", a.deck.flipping)
 	}
+	// Song rows start playback on a double click.
+	if err := tt.Click("Location"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tt.Click("Location"); err != nil {
 		t.Fatal(err)
 	}
@@ -359,6 +363,10 @@ func TestCardPicksToggle(t *testing.T) {
 	tt.Advance(time.Second)
 	toggle := func(play, name string, id int64) {
 		t.Helper()
+		// Song rows start playback on a double click.
+		if err := tt.Click(play + name); err != nil {
+			t.Fatal(err)
+		}
 		if err := tt.Click(play + name); err != nil {
 			t.Fatal(err)
 		}
@@ -370,6 +378,9 @@ func TestCardPicksToggle(t *testing.T) {
 		label := play + name
 		if was {
 			label = "暂停 " + name
+		}
+		if err := tt.Click(label); err != nil {
+			t.Fatal(err)
 		}
 		if err := tt.Click(label); err != nil {
 			t.Fatal(err)

@@ -15,7 +15,7 @@ import (
 
 // appIdentifier is the installed app's: the session is kept under it, and
 // the test binary's own identifier is not one.
-const appIdentifier = "io.github.nya-owo.cloud-nya"
+const appIdentifier = "io.github.chenzihao0729.cloudy-next"
 
 // TestHistoryRecommendLive asks NetEase's own endpoints for the dates whose
 // daily recommendations it still keeps, and for one of them: what it answers

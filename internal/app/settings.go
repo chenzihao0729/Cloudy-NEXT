@@ -292,8 +292,8 @@ func settingsPath() (string, error) {
 // kept its data under.
 const oldName = "网易云音乐"
 
-// lastName is what the app was called before Cloudy-NEXT. The identifier stayed
-// as it was then, so the login, kept under it, goes on by itself.
+// lastName is what the app was called before Cloudy-NEXT. Its old data may
+// still be moved into the current data directory when it is empty.
 const lastName = "Cloud-nya"
 
 // previousName is the immediately previous product name, whose data must

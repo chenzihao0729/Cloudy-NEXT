@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	trayPopupWidth  = 288 // 240 DIP menu, with room for its transparent shadow
-	trayPopupHeight = 432
+	trayPopupWidth = 288 // 240 DIP menu, with room for its transparent shadow
+	// The redundant "打开 Cloudy-NEXT" command was removed; keep the
+	// flyout tight to the remaining command groups.
+	trayPopupHeight = 395
 	trayPopupMargin = 24
 	// trayPopupGap is between the icon and the card, not the window: the
 	// window's transparent margin reaches over it.
@@ -173,7 +175,6 @@ func (a *app) trayCommands() [][]trayCommand {
 		return func() { mygo.App.Focus(); fn() }
 	}
 	return [][]trayCommand{
-		{{icon: iconHome, label: "打开 Cloudy-NEXT", run: a.showMain}},
 		{
 			{icon: playIcon, label: playLabel, disabled: tr == nil, run: a.pl.TogglePlay},
 			{icon: iconPrev, label: "上一首", disabled: tr == nil, run: a.pl.Prev},
@@ -228,22 +229,24 @@ func (a *app) trayPopupView(c *ui.Context) {
 		// a window with room around it, was cut off square at its edges (#22).
 		card.Shadow(0, trayShadowY, trayShadowBlur, trayShadowSpread, ui.RGBA(0, 0, 0, .3))
 		card.TextColor(p.text).Children(func() {
-			ui.Scroll(c.Key("tray-commands")).Fill().Padding(6).Gap(1).
-				Role(ui.RoleMenu).Label("托盘菜单").FocusGroup(ui.Vertical).Children(func() {
-				for i, group := range a.trayCommands() {
-					if i > 0 {
-						ui.Box(c).Height(.5).Margin(4, 8).Background(popoverColors(p.dark).edge)
-					}
-					for j, command := range group {
-						b := a.menuItem(c, command.icon, command.label, command.status).Disabled(command.disabled)
-						if i == 0 && j == 0 {
-							b.AutoFocus()
+			ui.Column(c.Key("tray-command-center")).Fill().Justify(ui.Center).Children(func() {
+				ui.Column(c.Key("tray-commands")).Padding(6).Gap(1).
+					Role(ui.RoleMenu).Label("托盘菜单").FocusGroup(ui.Vertical).Children(func() {
+					for i, group := range a.trayCommands() {
+						if i > 0 {
+							ui.Box(c).Height(.5).Margin(4, 8).Background(popoverColors(p.dark).edge)
 						}
-						if b.Clicked() {
-							a.finishTrayPopup(command.run)
+						for j, command := range group {
+							b := a.menuItem(c, command.icon, command.label, command.status).Disabled(command.disabled)
+							if i == 0 && j == 0 {
+								b.AutoFocus()
+							}
+							if b.Clicked() {
+								a.finishTrayPopup(command.run)
+							}
 						}
 					}
-				}
+				})
 			})
 		})
 	})

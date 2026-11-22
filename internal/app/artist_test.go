@@ -92,6 +92,10 @@ func TestArtistSongsByLatest(t *testing.T) {
 	// As the answer lands, which post drops without a window.
 	d.latest, d.latestLoading = []netease.Track{song(2, "新歌"), song(3, "更新的歌")}, false
 	tt.Frame()
+	// Song rows start playback on a double click.
+	if err := tt.Click("新歌"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tt.Click("新歌"); err != nil {
 		t.Fatal(err)
 	}

@@ -381,7 +381,14 @@ func Run() error {
 	if !mygo.App.RequestSingleInstanceLock() {
 		return nil
 	}
-	mygo.App.OnSecondInstance(func([]string, string) { a.showMain() })
+	secondInstance := false
+	mygo.App.OnSecondInstance(func([]string, string) {
+		if a.win == nil {
+			secondInstance = true
+			return
+		}
+		a.showMain()
+	})
 	a.listenForOpenedFiles()
 	moveOldData()
 	copyFormerData()
@@ -459,6 +466,10 @@ func Run() error {
 			// Started at login, as the listener asked: to the tray.
 			Hidden: a.startsHidden(),
 		})
+		if secondInstance {
+			secondInstance = false
+			a.showMain()
+		}
 		if err := a.win.SetIcon(resources.Icon); err != nil {
 			log.Printf("window icon: %v", err)
 		}

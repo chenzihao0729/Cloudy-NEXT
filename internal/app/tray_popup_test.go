@@ -95,12 +95,8 @@ func TestTrayPopupCommands(t *testing.T) {
 	}
 	a.toggleTrayPopup()
 	tt.Frame()
-	if !tt.Focused("打开 Cloudy-NEXT") {
-		t.Fatal("menu has no initial keyboard focus")
-	}
-	tt.Key(0, ui.KeyDown)
 	if !tt.Focused("播放") {
-		t.Fatal("Down did not reach play")
+		t.Fatal("menu has no initial keyboard focus")
 	}
 	tt.Key(0, ui.KeySpace)
 	tt.Frame()
@@ -231,8 +227,10 @@ func TestTrayPopupLifecycle(t *testing.T) {
 	}
 	a.toggleTrayPopup()
 	tt.Frame()
-	tt.Key(0, ui.KeyEnter)
-	tt.Frame() // Default "open Cloudy" is safe with no main window.
+	if err := tt.Click("桌面歌词"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
 	fourth := (*windows)[3]
 	fourth.flush()
 	if a.trayPopup != nil || !fourth.destroyed {
