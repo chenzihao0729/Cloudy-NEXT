@@ -1,6 +1,6 @@
 # Cloudy
 
-<img src="resources/icon.png" width="120" alt="Cloudy 图标">
+<img src="resources/amicon.png" width="120" alt="Cloudy-NEXT 图标">
 
 nya 维护的第三方网易云音乐 Windows 客户端（原名 Cloud-nya），基于 [egoist/mygo-cloudmusic](https://github.com/egoist/mygo-cloudmusic) 修改。用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写，原生界面，不用 WebView，占用小、启动快。
 
