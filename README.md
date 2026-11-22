@@ -1,8 +1,8 @@
-# Cloudy
+# Cloudy-NEXT
 
-<img src="resources/icon.png" width="120" alt="Cloudy 图标">
+<img src="resources/amicon.png" width="120" alt="Cloudy-NEXT 图标">
 
-nya 维护的第三方网易云音乐 Windows 客户端（原名 Cloud-nya），基于 [egoist/mygo-cloudmusic](https://github.com/egoist/mygo-cloudmusic) 修改。用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写，原生界面，不用 WebView，占用小、启动快。
+Zihao C 维护的音乐桌面客户端，基于 [nya-owo/cloudy](https://github.com/nya-owo/cloudy) 修改。用 Go 和 [MyGo](https://github.com/egoist/mygo) 编写，原生界面，不用 WebView，占用小、启动快。
 
 ## 特色功能
 
@@ -43,7 +43,7 @@ nya 维护的第三方网易云音乐 Windows 客户端（原名 Cloud-nya），
 
 ## 下载
 
-到 [Releases](https://github.com/nya-owo/cloudy/releases) 下载安装包。目前只提供 Windows 版本（x64 和 ARM64）。安装包没有代码签名，Windows 可能提示“已保护你的电脑”，点“更多信息”后选“仍要运行”。
+到 [Releases](https://github.com/chenzihao0729/Cloudy-NEXT/releases) 下载安装包。目前只提供 Windows 版本。安装包没有代码签名，Windows 可能提示“已保护你的电脑”，点“更多信息”后选“仍要运行”。
 
 ## 原项目的功能
 
@@ -73,17 +73,17 @@ go test ./...        # 运行测试
 
 ## AI 贡献者
 
-Cloudy 由 **nya-owo** 开发并维护，同时借助 AI 工具协助完成开发工作。
+Cloudy-NEXT 由 **Zihao C** 维护，同时借助 AI 工具协助完成开发工作。
 
 | 贡献者 | 所属组织 | 角色 |
 |---|---|---|
-| **nya-owo** | 独立开发者 | 项目所有者与维护者 |
-| **Claude** | Anthropic | AI 编程助手 |
+| **nya-owo** | 独立开发者 | 原项目作者 |
 | **OpenAI Codex** | OpenAI | AI 编程助手 |
 
 ## 致谢
 
-- [egoist/mygo-cloudmusic](https://github.com/egoist/mygo-cloudmusic)：本项目修改自它，原作者 egoist
+- [nya-owo/cloudy](https://github.com/nya-owo/cloudy)：原项目，感谢作者 nya-owo
+- [egoist/mygo-cloudmusic](https://github.com/egoist/mygo-cloudmusic)：上游项目参考
 - [Lucide](https://lucide.dev)：部分图标（ISC 许可）
 - [MyGo](https://github.com/egoist/mygo)：原生 UI 与应用框架
 - [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)：eapi 加密与登录流程的参考
