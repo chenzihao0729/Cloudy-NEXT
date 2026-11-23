@@ -86,47 +86,70 @@ func (a *app) albumIndexButton(c *ui.Context, v *plView) {
 		v.indexOpen = !v.indexOpen
 		v.indexQuery = ""
 	}
+	// It grows down out of its chip, and goes back into it: the popover
+	// builds it no more once it closes, so it goes as built where it was,
+	// its search a line of text (growGhost).
+	open := v.indexOpen
+	grown := a.growK(c, "album-index", open, growOpen)
+	from := b.Bounds()
+	ink := a.inkOn(false)
+	fill := func(live bool) func(body ui.Element) {
+		return func(body ui.Element) {
+			body.Padding(6).Gap(4).TextColor(ink.text)
+			body.Children(func() {
+				field := ui.Row(c).Height(32).PaddingX(10).Gap(7).Radius(14).AlignItems(ui.Center).Background(ink.hover)
+				field.Children(func() {
+					ui.Icon(c, iconSearch).Size(13, 13).TextColor(ink.muted)
+					if !live {
+						shown, color := v.indexQuery, ink.text
+						if shown == "" {
+							shown, color = indexSearch(v), ink.faint
+						}
+						ui.Text(c, shown).FontSize(12.5).TextColor(color).SingleLine().Grow(1).MinWidth(0)
+						return
+					}
+					ui.TextInputBase(c.Key("album-search"), &v.indexQuery).AutoFocus().Grow(1).MinWidth(0).
+						Placeholder(indexSearch(v)).FontSize(12.5).Label(indexSearch(v))
+					if v.indexQuery != "" && iconButton(c.Key("album-search-clear"), iconX, 11, ink.muted, "清除搜索").Size(20, 20).Clicked() {
+						v.indexQuery = ""
+					}
+				})
+				q := strings.ToLower(strings.TrimSpace(v.indexQuery))
+				ui.Scroll(c.Key("album-index-list")).MaxHeight(max(min(menuTallest, a.winHeight(c)-200), 150)).Gap(1).Children(func() {
+					if q == "" {
+						all, unit := "全部专辑", "张"
+						if v.sort == sortArtist {
+							all, unit = "全部歌手", "位"
+						}
+						if a.albumRow(c, ink, all, fmt.Sprintf("%d %s", len(v.all), unit), "", v.album == "", true).Clicked() {
+							a.chooseAlbum(v, "")
+						}
+					}
+					found := 0
+					for _, g := range v.all {
+						if q != "" && !strings.Contains(strings.ToLower(g.name+" "+g.artist), q) {
+							continue
+						}
+						found++
+						if a.albumRow(c.Key(g.key), ink, g.name, fmt.Sprintf("%s · %d 首", g.artist, g.n), g.cover, g.key == v.album, false).Clicked() {
+							a.chooseAlbum(v, g.key)
+						}
+					}
+					if found == 0 {
+						ui.Text(c, "没有找到").FontSize(12.5).TextColor(ink.muted).Padding(14, 10)
+					}
+				})
+			})
+		}
+	}
 	ui.PopoverBase(c.Key("album-index-pop"), b, &v.indexOpen, func(panel ui.Element) {
-		ink := a.inkOn(false)
-		a.pane(panel, 20, false)
-		panel.AttachTo(b, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(6, 0, 0, 0).Width(320).Padding(6).Gap(4).
-			TextColor(ink.text).Label(indexName(v)).
-			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.96, Y: -4}, Exit: &ui.Motion{Scale: 0.98}})
-		field := ui.Row(c).Height(32).PaddingX(10).Gap(7).Radius(14).AlignItems(ui.Center).Background(ink.hover)
-		field.Children(func() {
-			ui.Icon(c, iconSearch).Size(13, 13).TextColor(ink.muted)
-			ui.TextInputBase(c.Key("album-search"), &v.indexQuery).AutoFocus().Grow(1).MinWidth(0).
-				Placeholder(indexSearch(v)).FontSize(12.5).Label(indexSearch(v))
-			if v.indexQuery != "" && iconButton(c.Key("album-search-clear"), iconX, 11, ink.muted, "清除搜索").Size(20, 20).Clicked() {
-				v.indexQuery = ""
-			}
-		})
-		q := strings.ToLower(strings.TrimSpace(v.indexQuery))
-		ui.Scroll(c.Key("album-index-list")).MaxHeight(max(min(menuTallest, a.winHeight(c)-200), 150)).Gap(1).Children(func() {
-			if q == "" {
-				all, unit := "全部专辑", "张"
-				if v.sort == sortArtist {
-					all, unit = "全部歌手", "位"
-				}
-				if a.albumRow(c, ink, all, fmt.Sprintf("%d %s", len(v.all), unit), "", v.album == "", true).Clicked() {
-					a.chooseAlbum(v, "")
-				}
-			}
-			found := 0
-			for _, g := range v.all {
-				if q != "" && !strings.Contains(strings.ToLower(g.name+" "+g.artist), q) {
-					continue
-				}
-				found++
-				if a.albumRow(c.Key(g.key), ink, g.name, fmt.Sprintf("%s · %d 首", g.artist, g.n), g.cover, g.key == v.album, false).Clicked() {
-					a.chooseAlbum(v, g.key)
-				}
-			}
-			if found == 0 {
-				ui.Text(c, "没有找到").FontSize(12.5).TextColor(ink.muted).Padding(14, 10)
-			}
-		})
+		panel.AttachTo(b, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(6, 0, 0, 0).Width(320).
+			TextColor(ink.text).Label(indexName(v))
+		a.growInside(c, panel, "album-index", grown, true, from, 16, 20, 320, 0, fill(true))
 	})
+	if !open {
+		a.growGhost(c, "album-index", grown, from, 16, 20, 320, 0, fill(false))
+	}
 }
 
 // indexName names the index of a list's groups: of its albums or artists.

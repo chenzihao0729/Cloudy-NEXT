@@ -81,6 +81,10 @@ type settings struct {
 	UpdateChecks  bool  `json:"updateChecks"`
 	UpdateInstall bool  `json:"updateInstall"`
 	UpdateChecked int64 `json:"updateChecked,omitempty"`
+	// UpdateSource is where updates download from: empty for GitHub and
+	// then its mirrors, "github" for GitHub alone, or the prefix of one of
+	// updateMirrors for that mirror alone.
+	UpdateSource string `json:"updateSource,omitempty"`
 	// LastVersion is the version that last ran, which tells the first
 	// launch after an update; UpdateNotes are the notes of the update the
 	// app installed, said at that launch. CoverNoticed is set once the

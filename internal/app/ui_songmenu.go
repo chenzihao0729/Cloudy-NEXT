@@ -141,18 +141,19 @@ func (a *app) songHead(tr *netease.Track) func(c *ui.Context, ink paneInk) {
 
 // songMenu is three dots that open the menu of tr, over Now Playing.
 func (a *app) songMenu(c *ui.Context, tr *netease.Track, size float32, color ui.Color) ui.Element {
-	return a.songMenuLabeled(c, tr, size, color, "更多")
+	return a.songMenuLabeled(c, tr, true, size, color, "更多")
 }
 
 // songMenuLabeled is songMenu with the name its button is known by: the
-// player bar calls it details.
-func (a *app) songMenuLabeled(c *ui.Context, tr *netease.Track, size float32, color ui.Color, label string, extra ...[]menuAction) ui.Element {
+// player bar calls it details. onDark is for a button over Now Playing; the
+// player bar's menu takes the theme, as its other menus do.
+func (a *app) songMenuLabeled(c *ui.Context, tr *netease.Track, onDark bool, size float32, color ui.Color, label string, extra ...[]menuAction) ui.Element {
 	b := iconButton(c, iconMore, size, color, label).Tooltip(label)
 	if b.Clicked() {
 		// The details of what plays, which the sound effects shape too.
 		fx := menuAction{label: "音效", icon: iconWave, note: a.effectsNote(), do: a.openEffects}
 		groups := append([][]menuAction{{fx}}, extra...)
-		a.menuBelow(b, true, append(groups, a.songActions(tr, 0)...), a.songHead(tr))
+		a.menuBelow(b, onDark, append(groups, a.songActions(tr, 0)...), a.songHead(tr))
 	}
 	return b
 }

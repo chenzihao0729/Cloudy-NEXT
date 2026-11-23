@@ -321,8 +321,10 @@ func (a *app) stylePage(c *ui.Context) {
 					sh.text(c, 13, 1.3).Width(240)
 					return
 				}
-				ui.Text(c, fmt.Sprintf("%d 首 · 按你选的风格挑选，每天更新", len(songs))).FontSize(13).TextColor(p.muted)
-				ui.Row(c).Gap(10).Margin(8, 0, 0, 0).Children(func() {
+				a.loadedIn(ui.Text(c, fmt.Sprintf("%d 首 · 按你选的风格挑选，每天更新", len(songs))).FontSize(13).TextColor(p.muted), 1)
+				buttons := ui.Row(c).Gap(10).Margin(8, 0, 0, 0)
+				a.loadedIn(buttons, 2)
+				buttons.Children(func() {
 					if pillButton(c.Key("play"), iconPlay, "播放全部", p.accent, p.onAccent).Clicked() {
 						a.playList(songs, false)
 					}
@@ -472,7 +474,7 @@ func (a *app) stylePickerDialog(c *ui.Context) {
 					case b.Hovered():
 						fg = ink.text
 					}
-					b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+					b.Background(b.AnimateColor("bg", bg, motionHover))
 					b.Children(func() {
 						label := cat.Name
 						if n := a.pickedIn(cat.ID); n > 0 {
@@ -501,7 +503,7 @@ func (a *app) stylePickerDialog(c *ui.Context) {
 						case b.Hovered():
 							bg = ink.hover.Mix(ink.text, 0.08)
 						}
-						b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+						b.Background(b.AnimateColor("bg", bg, motionHover))
 						b.Children(func() {
 							ui.Text(c, t.Name).FontSize(13).FontWeight(600).TextColor(fg).SingleLine()
 						})

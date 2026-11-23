@@ -252,3 +252,38 @@ func TestMoveOldData(t *testing.T) {
 		t.Fatalf("settings %q, moved over what was there", b)
 	}
 }
+
+// The update source is chosen in the settings, from the automatic choice,
+// GitHub, and each mirror by number.
+func TestUpdateSourceChoices(t *testing.T) {
+	var labels []string
+	for _, s := range updateSources() {
+		labels = append(labels, s.label)
+	}
+	want := []string{"自动", "官方源"}
+	for i := range updateMirrors {
+		want = append(want, "镜像源 "+string(rune('1'+i)))
+	}
+	if strings.Join(labels, ",") != strings.Join(want, ",") {
+		t.Errorf("sources %q, want %q", labels, want)
+	}
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.updates = true
+	a.settingsView.tab = settingsAbout
+	tt := ui.NewTester(a.settingsBody, 560, 3000)
+	tt.Frame()
+	if !tt.HasText("下载源") || !tt.HasText("自动") {
+		t.Error("no update source in the settings")
+	}
+	a.settings.UpdateSource = updateMirrors[0]
+	tt.Frame()
+	if !tt.HasText("镜像源 1") {
+		t.Error("the chosen mirror is not shown")
+	}
+	// A mirror an older version knew falls back to the automatic choice.
+	a.settings.UpdateSource = "https://gone.example/"
+	a.applyUpdateSource()
+	a.settings.UpdateSource = ""
+	a.applyUpdateSource()
+}

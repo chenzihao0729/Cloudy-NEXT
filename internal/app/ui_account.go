@@ -390,10 +390,10 @@ func (a *app) profileName() string {
 func (a *app) accountRow(c *ui.Context) {
 	p := a.pal
 	b := ui.ButtonBase(c.Key("account")).Height(40).PaddingX(8).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
-	if b.Hovered() || a.accountOpen && a.profile != nil {
-		b.Background(p.hover)
-	}
 	if a.profile == nil {
+		if b.Hovered() {
+			b.Background(p.hover)
+		}
 		a.accountOpen = false
 		b.Label("登录").Children(func() {
 			ui.Box(c).Size(26, 26).Radius(13).Background(p.press).Center().Children(func() {
@@ -407,51 +407,56 @@ func (a *app) accountRow(c *ui.Context) {
 		return
 	}
 	prof := a.profile
-	b.Label(prof.Nickname).Expanded(a.accountOpen).Children(func() {
-		a.avatar(c, prof.AvatarURL, 26, p.press)
-		ui.Text(c, prof.Nickname).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
-		ui.Icon(c, iconUpDown).Size(13, 13).TextColor(p.faint)
-	})
+	k := a.accountMenuK(b)
+	// While the menu shows, it has taken the row in as its last row, drawn
+	// over it: the row itself keeps no hover under the glass.
+	if b.Hovered() && k <= accountGone {
+		b.Background(p.hover)
+	}
+	b.Label(prof.Nickname).Expanded(a.accountOpen).Children(func() { a.accountRowContent(c, prof) })
 	if b.Clicked() {
 		a.accountOpen = !a.accountOpen
 	}
-	a.accountMenu(c, b)
+	a.accountMenu(c, b, k)
 }
 
-// accountMenu drops up from the account row, as wide as it, in the colors
-// of the volume popover: the listener's own page and the settings, then
-// signing out.
-func (a *app) accountMenu(c *ui.Context, row ui.Element) {
+// accountRowContent is what the account row shows: the listener's avatar
+// and name, and that it opens a menu.
+func (a *app) accountRowContent(c *ui.Context, prof *netease.Profile) {
+	p := a.pal
+	a.avatar(c, prof.AvatarURL, 26, p.press)
+	ui.Text(c, prof.Nickname).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+	ui.Icon(c, iconUpDown).Size(13, 13).TextColor(p.faint)
+}
+
+// accountItems are the rows of the account menu: the listener's own page,
+// their messages and the settings, then signing out. Only an open menu
+// takes clicks, not one going away.
+func (a *app) accountItems(c *ui.Context, open bool) {
 	pop := popoverColors(a.pal.dark)
-	ui.PopoverBase(c.Key("account-menu"), row, &a.accountOpen, func(panel ui.Element) {
-		a.pane(panel, 20, false)
-		panel.AttachTo(row, ui.AnchorTopStart, ui.AnchorBottomStart).Margin(0, 0, 6, 0).Padding(6).Gap(1).
-			Role(ui.RoleMenu).FocusGroup(ui.Vertical).Label("账户").TransformOrigin(0.5, 1).
-			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.96, Y: 4}, Exit: &ui.Motion{Scale: 0.98}})
-		if w := row.Bounds().W; w > 0 {
-			panel.Width(w)
-		}
-		shortcut := "Ctrl+,"
-		if runtime.GOOS == "darwin" {
-			shortcut = "⌘,"
-		}
-		if a.menuItem(c, iconUser, "我的主页", "").AutoFocus().Clicked() {
-			a.accountOpen = false
-			a.open(route{page: pageUser, id: a.profile.UserID})
-		}
-		if a.menuItem(c, iconComment, "私信", "").Clicked() {
-			a.openPrivateMessages(nil)
-		}
-		if a.menuItem(c, iconSettings, "设置…", shortcut).Clicked() {
-			a.accountOpen = false
-			a.openSettings()
-		}
-		ui.Box(c).Height(0.5).Margin(4, 8).Background(pop.edge)
-		if a.menuItem(c, iconSignOut, "退出登录…", "").Clicked() {
-			a.accountOpen = false
-			a.askSignOut()
-		}
-	})
+	shortcut := "Ctrl+,"
+	if runtime.GOOS == "darwin" {
+		shortcut = "⌘,"
+	}
+	if a.menuItem(c, iconUser, "我的主页", "").AutoFocus().Clicked() && open {
+		a.accountOpen = false
+		a.open(route{page: pageUser, id: a.profile.UserID})
+	}
+	if row := a.menuItem(c, iconComment, "私信", ""); row.Clicked() && open {
+		a.growFrom("private-messages", row, 14)
+		a.openPrivateMessages(nil)
+	}
+	if row := a.menuItem(c, iconSettings, "设置…", shortcut); row.Clicked() && open {
+		a.growFrom("settings", row, 14)
+		a.accountOpen = false
+		a.openSettings()
+	}
+	ui.Box(c.Key("account-line")).Height(0.5).Margin(4, 8).Background(pop.edge)
+	if row := a.menuItem(c, iconSignOut, "退出登录…", ""); row.Clicked() && open {
+		a.growFrom("sign-out", row, 14)
+		a.accountOpen = false
+		a.askSignOut()
+	}
 }
 
 // menuItem is an item of a dropdown: an icon, its label, and the shortcut
@@ -530,9 +535,11 @@ func (a *app) playlistRows(c *ui.Context, lists []netease.Playlist, mine bool) {
 		selected := a.route.page == pagePlaylist && a.route.id == pl.ID && !a.nowPlaying
 		d := a.side()
 		b := ui.ButtonBase(c.Key(pl.ID)).Height(d.row).Radius(8).FocusRing(false).Label(pl.Name)
-		if b.Hovered() && !selected {
-			b.Background(p.hover)
+		bg := ui.Transparent
+		if (b.Hovered() || a.menuHeld(b)) && !selected {
+			bg = p.hover
 		}
+		b.Background(b.AnimateColor("bg", bg, motionHover))
 		a.navRowContent(c, b, selected, 8, func() {
 			a.cover(c, pl.Cover(), 96, d.cover, d.coverRadius)
 			label := ui.Text(c, pl.Name).FontSize(d.text).TextColor(p.text).SingleLine().Shrink(1).MinWidth(0)

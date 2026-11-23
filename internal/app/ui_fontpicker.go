@@ -56,9 +56,6 @@ func (a *app) setFont(id string) {
 // choose from, and imports a font file.
 func (a *app) fontPickerDialog(c *ui.Context) {
 	p := &a.settingsView.fontPick
-	if !p.open {
-		return
-	}
 	ink := a.inkOn(false)
 	w, h := c.Size()
 	a.dialog(c, "font-picker", 0.35, &p.open, func(panel ui.Element) {

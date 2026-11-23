@@ -214,9 +214,11 @@ func (a *app) albumRows(c *ui.Context, albums []netease.AlbumProfile) {
 		selected := a.route.page == pageAlbum && a.route.id == al.ID && !a.nowPlaying
 		d := a.side()
 		b := ui.ButtonBase(c.Key(al.ID)).Height(d.row).Radius(8).FocusRing(false).Label(al.Name)
-		if b.Hovered() && !selected {
-			b.Background(p.hover)
+		bg := ui.Transparent
+		if (b.Hovered() || a.menuHeld(b)) && !selected {
+			bg = p.hover
 		}
+		b.Background(b.AnimateColor("bg", bg, motionHover))
 		a.navRowContent(c, b, selected, 8, func() {
 			a.cover(c, al.PicURL, 96, d.cover, d.coverRadius)
 			label := ui.Text(c, al.Name).FontSize(d.text).TextColor(p.text).SingleLine().Shrink(1).MinWidth(0)

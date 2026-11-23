@@ -192,7 +192,9 @@ func (a *app) podcastPage(c *ui.Context) {
 	a.scrollPage(c, func() {
 		ui.Row(c).Gap(28).AlignItems(ui.End).Padding(0, 0, 8, 0).Children(func() {
 			a.headCover(c, pod.PicURL)
-			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
+			info := ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8)
+			a.loadedIn(info, 0)
+			info.Children(func() {
 				kind := "播客"
 				if pod.Category != "" {
 					kind += " · " + pod.Category

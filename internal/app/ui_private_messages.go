@@ -20,7 +20,7 @@ func (a *app) privateMessagesPanel(c *ui.Context) {
 			a.requestPrivateClose()
 		}
 		p.admit(c, k, d.open, a.motion)
-		panel.Width(min(940, w-48)).Height(max(h-72, 320)).TextColor(ink.text).Label("私信").TransformOrigin(0, 1)
+		panel.Width(min(940, w-48)).Height(max(h-72, 320)).TextColor(ink.text).Label("私信")
 		a.privateMessagePane(c, panel, func() {
 			if !p.contents {
 				return

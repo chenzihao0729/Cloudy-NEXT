@@ -355,7 +355,7 @@ func (a *app) dailyPlayButton(c *ui.Context, songs []netease.Track, ours, playin
 	if b.Hovered() {
 		fill = ui.Hex("#f2f2f4")
 	}
-	b.Background(b.AnimateColor("bg", fill, ui.Animation{Duration: 120 * time.Millisecond}))
+	b.Background(b.AnimateColor("bg", fill, motionHover))
 	pose := ui.Pose{}
 	if b.Pressed() {
 		pose.Scale = 0.95
@@ -413,10 +413,10 @@ func (a *app) dailyPicks(c *ui.Context, songs []netease.Track, ours bool) {
 			row := ui.ButtonBase(c.Key(tr.ID)).Row().Gap(12).Padding(7, 12).Radius(14).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
 			a.songContext(row, tr, 0)
 			bg := white.Alpha(0)
-			if row.Hovered() {
+			if row.Hovered() || a.menuHeld(row) {
 				bg = white.Alpha(0.1)
 			}
-			row.Background(row.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+			row.Background(row.AnimateColor("bg", bg, motionHover))
 			current := ours && cur != nil && cur.ID == tr.ID
 			if current && playing {
 				row.Label("暂停 " + tr.Name)
@@ -561,8 +561,10 @@ func (a *app) dailyPage(c *ui.Context) {
 					})
 					return
 				}
-				ui.Text(c, fmt.Sprintf("%d 首 · %s", len(songs), a.dailyBlurb())).FontSize(13).TextColor(p.muted)
-				ui.Row(c).Gap(10).Margin(8, 0, 0, 0).Children(func() {
+				a.loadedIn(ui.Text(c, fmt.Sprintf("%d 首 · %s", len(songs), a.dailyBlurb())).FontSize(13).TextColor(p.muted), 1)
+				buttons := ui.Row(c).Gap(10).Margin(8, 0, 0, 0)
+				a.loadedIn(buttons, 2)
+				buttons.Children(func() {
 					if pillButton(c.Key("play"), iconPlay, "播放全部", p.accent, p.onAccent).Clicked() {
 						a.playList(songs, false)
 					}

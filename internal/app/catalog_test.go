@@ -173,7 +173,7 @@ func TestSearchHistoryChoice(t *testing.T) {
 		if err := tt.Click("搜索"); err != nil {
 			t.Fatal(err)
 		}
-		tt.Frame()
+		settle(tt)
 		if keys {
 			tt.Key(0, ui.KeyDown)
 			tt.Key(0, ui.KeyDown)
@@ -213,7 +213,7 @@ func TestSuggestionOpensPage(t *testing.T) {
 		Albums: []netease.AlbumProfile{{Album: netease.Album{ID: 8, Name: "迷跡波"}, Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}},
 		Order:  []string{"albums"},
 	})
-	tt.Frame()
+	settle(tt)
 	if err := tt.Click("专辑：迷跡波"); err != nil {
 		t.Fatal(err)
 	}

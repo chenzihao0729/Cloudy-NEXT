@@ -176,6 +176,7 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 	a.commentComposer(c, tr)
 	if len(cs.hot) == 0 && len(cs.latest) == 0 {
 		if cs.loading || !cs.loaded && cs.err == "" {
+			a.mk.comments = time.Now() // what comes in place of the skeleton fades in
 			ui.Column(c).Grow(1).Padding(4, 8, 0, 0).Gap(2).Children(func() {
 				s := npShimmer(c)
 				s.text(c, 13, 1.3).Width(56).Margin(18, 12, 6, 12)
@@ -213,6 +214,7 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 				a.commentRow(c.Key(commentKey{false, cs.latest[i].ID}), &cs.latest[i], now)
 			}
 			if cs.loading {
+				a.mk.comments = time.Now()
 				commentSkeleton(c.Key("more"), npShimmer(c), 2)
 			}
 			ui.Row(c.Key("foot")).Height(56).Center().Children(func() {
@@ -246,7 +248,9 @@ func commentHeading(c *ui.Context, title string) {
 // commentRow is a comment: who wrote it, what, and what it replies to,
 // when, from where, and how many liked it, with a thumb to like it too.
 func (a *app) commentRow(c *ui.Context, cm *netease.Comment, now time.Time) {
-	ui.Row(c).Padding(12).Gap(12).Radius(14).AlignItems(ui.Start).Children(func() {
+	row := ui.Row(c).Padding(12).Gap(12).Radius(14).AlignItems(ui.Start)
+	a.commentIn(row)
+	row.Children(func() {
 		a.avatar(c, cm.User.AvatarURL, 34, white.Alpha(0.1))
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(6).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -285,7 +289,7 @@ func (a *app) commentLike(c *ui.Context, cm *netease.Comment) {
 	if b.Hovered() && !cm.Liked {
 		fg = white.Alpha(0.75)
 	}
-	b.TextColor(b.AnimateColor("fg", fg, ui.Animation{Duration: 120 * time.Millisecond}))
+	b.TextColor(b.AnimateColor("fg", fg, motionHover))
 	b.Children(func() {
 		icon := iconThumb
 		if cm.Liked {

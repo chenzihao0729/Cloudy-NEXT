@@ -25,6 +25,7 @@ const (
 
 // pageShimmer is the shimmer of the pages, on their background.
 func (a *app) pageShimmer(c *ui.Context) shimmer {
+	a.sawSkeleton()
 	s := shimmer{base: ui.RGBA(0, 0, 0, 0.06), sheen: ui.RGBA(0, 0, 0, 0.022)}
 	if a.pal.dark {
 		s.base, s.sheen = white.Alpha(0.07), white.Alpha(0.13)
@@ -149,7 +150,12 @@ func (a *app) trackSkeleton(c *ui.Context, s shimmer, covers bool, header func(c
 	wide := w-a.sideWidth(w) > 820
 	top, bottom := a.insets(c)
 	a.underTop, a.underBottom = false, true
-	ui.Column(c.Key("skeleton")).Grow(1).Padding(top+pageGap, pagePad-12, bottom+32, pagePad-12).Children(func() {
+	sk := ui.Column(c.Key("skeleton")).Grow(1).Padding(top+pageGap, pagePad-12, bottom+32, pagePad-12)
+	if a.motion != motionOff {
+		// It fades as the content comes in over it, rather than go at once.
+		sk.Transition(ui.ElementTransition{Animation: &motionLeave, Exit: &ui.Motion{}})
+	}
+	sk.Children(func() {
 		a.startMark(c)
 		header(c)
 		for i := range max(8, int(h/54)) {

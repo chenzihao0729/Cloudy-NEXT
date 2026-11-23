@@ -14,6 +14,8 @@ import (
 const sidebarWidth = 232
 
 func (a *app) view(c *ui.Context) {
+	a.mk.frame++
+	a.mk.cards = 0
 	// Poll quietly while the real window is open. Testers do not start
 	// background account requests just by drawing a frame.
 	if a.win != nil && a.profile != nil {
@@ -283,8 +285,7 @@ func (a *app) open(r route) {
 	if r == a.route {
 		return
 	}
-	a.history = append(a.history, a.route)
-	a.historyScroll = append(a.historyScroll, a.pageScroll.Y)
+	a.pushHistory(a.route)
 	a.forward, a.forwardScroll = nil, nil
 	a.show(r)
 }
@@ -310,7 +311,12 @@ func (a *app) show(r route) {
 	if r.page == pageSearch {
 		a.query, a.searched = r.query, r
 	}
+	a.seePage(r)
 	a.load(r)
+	// Pages shown long ago go, and once browsing stops a while, the
+	// memory the pages left took.
+	a.trimPageCaches()
+	a.releaseAfter(pageDelay, eventWorth)
 }
 
 // load loads what the page of r shows, unless it has.
@@ -392,8 +398,7 @@ func (a *app) goForward() {
 	if len(a.forward) == 0 {
 		return
 	}
-	a.history = append(a.history, a.route)
-	a.historyScroll = append(a.historyScroll, a.pageScroll.Y)
+	a.pushHistory(a.route)
 	r := a.forward[len(a.forward)-1]
 	a.forward = a.forward[:len(a.forward)-1]
 	a.restoreY = a.forwardScroll[len(a.forwardScroll)-1]
@@ -471,11 +476,14 @@ func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	if b.Hovered() && !selected {
 		bg = p.hover
 	}
-	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+	b.Background(b.AnimateColor("bg", bg, motionHover))
 	color := p.text
 	if selected {
 		color = p.accent
 	}
+	// The icon takes its color as the pill slides to it, in step, rather
+	// than before it gets there.
+	color = b.AnimateColor("ink", color, navMotion(a.motion))
 	a.navRowContent(c, b, selected, 10, func() {
 		ui.Icon(c, icon).Size(d.icon, d.icon).TextColor(color)
 		ui.Text(c, label).FontSize(d.navText).FontWeight(500).TextColor(p.text)
@@ -492,7 +500,7 @@ func (a *app) sidebarNowPlaying(c *ui.Context, tr *netease.Track) {
 	if card.Hovered() {
 		bg = p.press
 	}
-	card.Background(card.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+	card.Background(card.AnimateColor("bg", bg, motionHover))
 	card.Children(func() {
 		a.cover(c, tr.Album.PicURL, 96, 40, 8).Shadow(0, 2, 6, 0, p.cardShade)
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
@@ -605,7 +613,10 @@ func (a *app) pageTop(c *ui.Context, foreground float32) {
 		if iconButton(c.Key("mini"), iconMiniWin, 17, a.pal.muted, "迷你窗口").Clicked() {
 			a.showMini()
 		}
-		if iconButton(c.Key("settings"), iconSettings, 17, a.pal.muted, "设置").Clicked() {
+		gear := iconButton(c.Key("settings"), iconSettings, 17, a.pal.muted, "设置")
+		a.mk.gear = gear.Bounds()
+		if gear.Clicked() {
+			a.growFrom("settings", gear, 14)
 			a.openSettings()
 		}
 	})
@@ -635,6 +646,7 @@ func (a *app) content(c *ui.Context, foreground float32) {
 		a.pageScroll.Y, a.restoreY = a.restoreY, 0
 	}
 	a.headAt = ui.Rect{}
+	a.mk.cards = 0
 	// Pages mark where their content is, as they scroll.
 	a.underTop, a.underBottom = false, false
 	// Far away, unless its start is built, as it isn't scrolled out of view.

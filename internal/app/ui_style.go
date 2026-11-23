@@ -5,7 +5,6 @@ import (
 	"math/rand/v2"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -267,8 +266,8 @@ func (a *app) styleTile(c *ui.Context, s *roamStyle) {
 	case tile.Hovered():
 		bg = p.press
 	}
-	tile.Background(tile.AnimateColor("bg", bg, ui.Animation{Duration: 140 * time.Millisecond}))
-	tile.BorderColor(tile.AnimateColor("edge", edge, ui.Animation{Duration: 140 * time.Millisecond}))
+	tile.Background(tile.AnimateColor("bg", bg, motionHover))
+	tile.BorderColor(tile.AnimateColor("edge", edge, motionHover))
 	lift := ui.Pose{}
 	if tile.Hovered() {
 		lift.Y = -2

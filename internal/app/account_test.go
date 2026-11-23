@@ -70,6 +70,7 @@ func TestAccountMenuOpensOwnPage(t *testing.T) {
 	tt.Frame()
 	tt.Click("小明")
 	tt.Frame()
+	tt.Advance(time.Second)
 	if err := tt.Click("我的主页"); err != nil {
 		t.Fatal(err)
 	}

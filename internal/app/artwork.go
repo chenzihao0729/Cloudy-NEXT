@@ -54,9 +54,10 @@ type artCache struct {
 
 // artLimit is how many bytes of covers the cache keeps. A cover keeps its
 // data, some 50–100 KB for Now Playing's and a few for a row's, so this
-// is thousands: going back to a page shows its covers as they were,
-// however long ago it showed them, rather than loading them again.
-const artLimit = 64 << 20
+// is still a thousand or more: going back to a page shows its covers as
+// they were rather than loading them again. Hidden to the tray, the cache
+// keeps only hiddenArtLimit (see releaseHidden).
+const artLimit = 32 << 20
 
 func newArtCache(post func(func())) *artCache {
 	return &artCache{art: map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]bool{}, sem: make(chan struct{}, 8), post: post, now: time.Now, limit: artLimit}
@@ -66,11 +67,20 @@ func newArtCache(post func(func())) *artCache {
 // covers take more than the limit, down to three quarters of it, so that
 // it sorts them seldom. Those showing were asked for last, and stay.
 func (c *artCache) add(key string, a *artwork) {
+	if old, ok := c.art[key]; ok {
+		c.size -= old.size
+	}
 	c.art[key] = a
 	c.size += a.size
 	if c.size <= c.limit {
 		return
 	}
+	c.trim(c.limit * 3 / 4)
+}
+
+// trim drops the covers asked for least recently until those kept take
+// no more than target bytes.
+func (c *artCache) trim(target int) {
 	for key, p := range c.gone {
 		if p.Value() == nil {
 			delete(c.gone, key)
@@ -82,7 +92,7 @@ func (c *artCache) add(key string, a *artwork) {
 	}
 	slices.SortFunc(keys, func(x, y string) int { return c.art[x].used.Compare(c.art[y].used) })
 	for _, key := range keys {
-		if c.size <= c.limit*3/4 {
+		if c.size <= target {
 			break
 		}
 		a := c.art[key]
@@ -178,7 +188,8 @@ func (c *artCache) getArtwork(url string, backdrop, sticker, animate bool) *artw
 
 // artRelease is how long a cover keeps its pixels once loaded: past the
 // frame that first shows it, and the smaller copies it shows from there.
-const artRelease = 2 * time.Second
+// Longer, a fast scroll through a long list keeps megabytes of pixels.
+const artRelease = time.Second
 
 // Failed covers retry after a short backoff, rather than remaining blank
 // until restart or making a new request on every frame while offline.

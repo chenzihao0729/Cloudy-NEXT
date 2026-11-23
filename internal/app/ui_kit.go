@@ -141,7 +141,7 @@ func roundButton(c *ui.Context, size float32, color ui.Color, label string) ui.E
 	if b.Hovered() {
 		bg = ui.RGBA(128, 128, 128, 0.14)
 	}
-	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+	b.Background(b.AnimateColor("bg", bg, motionHover))
 	pose := ui.Pose{}
 	if b.Pressed() {
 		pose.Scale = 0.88
@@ -157,7 +157,7 @@ func pillButton(c *ui.Context, icon *ui.SVG, label string, bg, fg ui.Color) ui.E
 	if b.Hovered() {
 		fill = bg.Mix(ui.RGB(255, 255, 255), 0.12)
 	}
-	b.Background(b.AnimateColor("bg", fill, ui.Animation{Duration: 120 * time.Millisecond}))
+	b.Background(b.AnimateColor("bg", fill, motionHover))
 	pose := ui.Pose{}
 	if b.Pressed() {
 		pose.Scale = 0.96
@@ -345,22 +345,38 @@ func (a *app) segmentedControl(c *ui.Context, selected *int, labels []string, ac
 	if pick != nil {
 		parts.Track.OnChange(func() { pick(*selected) })
 	}
-	at := parts.Track.AnimateTo("at", float32(*selected), ui.Animation{Spring: ui.SpringOptions{Duration: 280 * time.Millisecond, Bounce: 0.08}})
+	// Full motion, or full as it was chosen in this very control: the
+	// slide away from it still lifts.
+	liquid := !a.settings.PowerSaver && (a.motion == motionFull || time.Since(a.mk.fullAt) < 800*time.Millisecond)
+	if a.motion == motionFull {
+		a.mk.fullAt = time.Now()
+	}
+	slide := ui.Animation{Spring: ui.SpringOptions{Duration: 280 * time.Millisecond, Bounce: 0.08}}
+	if liquid {
+		slide = lensSlide
+	}
+	at := parts.Track.AnimateTo("at", float32(*selected), slide)
 	n := len(labels)
 	hasSelection := active && *selected >= 0 && *selected < n
 	dark := t.Dark
+	// lift is how far the capsule has risen into a lens of liquid glass,
+	// as it is held or slides to another segment: it falls back as it
+	// lands.
+	var lift float32
+	held := false
 	parts.Track.Height(height).Padding(inset).Radius(radius).Background(track).Draw(func(p *ui.Painter, r ui.Rect) {
 		pill := ui.Rect{X: r.X + inset + at*width, Y: r.Y + inset, W: width, H: r.H - 2*inset}
-		if !hasSelection {
+		if !hasSelection || lift >= 0.999 {
 			return
 		}
+		stay := 1 - lift
 		if dark {
-			p.Shadow(pill, radius-inset, 0, 1, 4, 0, ui.RGBA(0, 0, 0, 0.28))
+			p.Shadow(pill, radius-inset, 0, 1, 4, 0, ui.RGBA(0, 0, 0, 0.28*stay))
 		} else {
-			p.Shadow(pill, radius-inset, 0, 0.5, 1, 0, ui.RGBA(0, 0, 0, 0.16))
-			p.Shadow(pill, radius-inset, 0, 2, 6, 0, ui.RGBA(0, 0, 0, 0.08))
+			p.Shadow(pill, radius-inset, 0, 0.5, 1, 0, ui.RGBA(0, 0, 0, 0.16*stay))
+			p.Shadow(pill, radius-inset, 0, 2, 6, 0, ui.RGBA(0, 0, 0, 0.08*stay))
 		}
-		p.Fill(pill, capsule, radius-inset)
+		p.Fill(pill, capsule.Alpha(stay), radius-inset)
 	}).Children(func() {
 		for i, l := range labels {
 			seg := parts.Segment(i).Width(width).Height(height - 2*inset).Center().Radius(radius - inset)
@@ -378,7 +394,20 @@ func (a *app) segmentedControl(c *ui.Context, selected *int, labels []string, ac
 				color = t.Text
 			}
 			seg.Children(func() { ui.Text(c, l).FontSize(13).FontWeight(weight).TextColor(color).SingleLine() })
+			if on && seg.Pressed() {
+				held = true
+			}
 		}
+		if !liquid {
+			return
+		}
+		lift = lensLift(parts.Track, at, float32(*selected), held)
+		if !hasSelection || lift <= 0.01 {
+			return
+		}
+		// The lens: larger than the capsule, the names under it bent
+		// through it.
+		a.liquidLens(c, "lens", ui.Rect{X: inset + at*width, Y: inset, W: width, H: height - 2*inset}, lift, 0.1, 0.2)
 	})
 	return *selected != before
 }

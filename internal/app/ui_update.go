@@ -13,9 +13,6 @@ import (
 // Its head says where it is at, once, under the dialogs' one title.
 func (a *app) updateDialog(c *ui.Context) {
 	u := &a.update
-	if !u.open {
-		return
-	}
 	p, ink := a.pal, a.inkOn(false)
 	a.dialog(c, "update", 0.35, &u.open, func(panel ui.Element) {
 		a.pane(panel, 26, false)

@@ -116,52 +116,44 @@ func (a *app) searchField(c *ui.Context) {
 		if q == "" && len(a.settings.SearchHistory) == 0 {
 			cb.SetOpen(false)
 		}
+		// It grows down out of the field's foot, as Spotlight's, from a
+		// sliver under it as wide as it: over the field, it hid what is
+		// typed. It goes back into it as rows built where it was, as it
+		// last showed (growGhost): the combobox builds it no more.
+		open := cb.Open()
+		grown := a.growK(c, "suggest", open, growOpen)
+		from := field.Bounds()
+		from.Y, from.H = from.Y+from.H+8, 10
 		cb.Popup(func(panel ui.Element) {
-			panel.AttachTo(field, ui.AnchorBottomStart, ui.AnchorTopStart).
-				Width(360).Padding(6).Margin(8, 0, 0, 0).TransformOrigin(0.2, 0)
-			a.pane(panel, 20, false)
-			a.paneMotion(panel)
-			option := func(key, label string) ui.Element {
-				row := cb.Item(key).MinHeight(36).Padding(6, 10).Gap(10).Radius(14).AlignItems(ui.Center).Label(label)
+			panel.AttachTo(field, ui.AnchorBottomStart, ui.AnchorTopStart).Width(360).Margin(8, 0, 0, 0)
+			shown := suggestShown{q: q}
+			if q == "" {
+				panel.Label("搜索历史")
+				shown.history = a.settings.SearchHistory
+			} else {
+				panel.Label("搜索建议")
+				if s.query == q {
+					shown.items = s.items
+				}
+			}
+			a.suggestShown = shown
+			a.growInside(c, panel, "suggest", grown, true, from, 8, 20, 360, 0, a.suggestList(c, shown, func(key, label string) ui.Element {
+				row := cb.Item(key).Label(label)
 				if row.Highlighted() {
 					row.Background(p.hover)
 				}
 				return row
-			}
-			if q == "" {
-				panel.Label("搜索历史")
-				ui.Row(c).Padding(2, 4, 2, 10).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "搜索历史").FontSize(12).TextColor(p.muted).Grow(1)
-					iconButton(c.Key("clear"), iconTrash, 14, p.muted, "清空搜索历史").KeepFocus().OnClick(a.clearSearchHistory)
-				})
-				for _, h := range a.settings.SearchHistory {
-					option("history:"+h, h).Children(func() {
-						ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted)
-						ui.Text(c, h).FontSize(13).SingleLine().Shrink(1).MinWidth(0)
-					})
-				}
-				return
-			}
-			panel.Label("搜索建议")
-			// The query first, which Enter searches as typed.
-			option("query", "搜索“"+q+"”").Children(func() {
-				ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted)
-				ui.Text(c, "搜索“"+q+"”").FontSize(13).FontWeight(500).SingleLine().Shrink(1).MinWidth(0)
-			})
-			if s.query == q {
-				for _, sg := range s.items {
-					option(sg.key, sg.kind+"："+sg.name).Children(func() {
-						ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
-							ui.Text(c, sg.name).FontSize(13).SingleLine()
-							if sg.detail != "" {
-								ui.Text(c, sg.detail).FontSize(11.5).TextColor(p.muted).SingleLine()
-							}
-						})
-						ui.Text(c, sg.kind).FontSize(11.5).TextColor(p.faint)
-					})
-				}
-			}
+			}, func() {
+				iconButton(c.Key("clear"), iconTrash, 14, p.muted, "清空搜索历史").KeepFocus().OnClick(a.clearSearchHistory)
+			}))
 		})
+		if !open {
+			a.growGhost(c, "suggest", grown, from, 8, 20, 360, 0, a.suggestList(c, a.suggestShown, func(key, _ string) ui.Element {
+				return ui.Row(c.Key(key))
+			}, func() {
+				ui.Box(c).Size(30, 30)
+			}))
+		}
 		if key, ok := cb.Chosen(); ok {
 			cb.SetOpen(false)
 			a.choose(key, q)
@@ -196,5 +188,58 @@ func (a *app) choose(key, q string) {
 		a.dismissSuggestions()
 		a.open(sg.route)
 		return
+	}
+}
+
+// suggestShown is what the search field's popup showed: the searches
+// before, with no query, or the suggestions for q.
+type suggestShown struct {
+	q       string
+	history []string
+	items   []suggestion
+}
+
+// suggestList fills the search field's popup with what shown holds, each
+// option a row option makes, which the popup's items are, and clear the
+// button clearing the searches before.
+func (a *app) suggestList(c *ui.Context, shown suggestShown, option func(key, label string) ui.Element, clear func()) func(body ui.Element) {
+	p := a.pal
+	return func(body ui.Element) {
+		body.Padding(6)
+		body.Children(func() {
+			row := func(key, label string) ui.Element {
+				return option(key, label).MinHeight(36).Padding(6, 10).Gap(10).Radius(14).AlignItems(ui.Center)
+			}
+			if shown.q == "" {
+				ui.Row(c).Padding(2, 4, 2, 10).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, "搜索历史").FontSize(12).TextColor(p.muted).Grow(1)
+					clear()
+				})
+				for _, h := range shown.history {
+					row("history:"+h, h).Children(func() {
+						ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted)
+						ui.Text(c, h).FontSize(13).SingleLine().Shrink(1).MinWidth(0)
+					})
+				}
+				return
+			}
+			// The query first, which Enter searches as typed.
+			q := shown.q
+			row("query", "搜索“"+q+"”").Children(func() {
+				ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted)
+				ui.Text(c, "搜索“"+q+"”").FontSize(13).FontWeight(500).SingleLine().Shrink(1).MinWidth(0)
+			})
+			for _, sg := range shown.items {
+				row(sg.key, sg.kind+"："+sg.name).Children(func() {
+					ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
+						ui.Text(c, sg.name).FontSize(13).SingleLine()
+						if sg.detail != "" {
+							ui.Text(c, sg.detail).FontSize(11.5).TextColor(p.muted).SingleLine()
+						}
+					})
+					ui.Text(c, sg.kind).FontSize(11.5).TextColor(p.faint)
+				})
+			}
+		})
 	}
 }

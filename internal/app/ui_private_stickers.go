@@ -71,75 +71,78 @@ func (a *app) privateStickerButton(c *ui.Context, chat *privateChat, ink paneInk
 		}
 	})
 	const key = "dm-sticker-picker"
-	k := a.paneProgress(c, key, p.open)
-	if k == 0 && !p.open {
+	// It grows up out of its button, and goes back into it.
+	k := a.growK(c, key, p.open, growOpen)
+	if k <= growGone && !p.open {
 		return
 	}
+	from := button.Bounds()
 	content := func(panel ui.Element) {
-		a.pane(panel, 20, false)
-		panel.AttachTo(button, ui.AnchorTopStart, ui.AnchorBottomStart).Size(privateStickerPanelWidth, 310).
-			Padding(privateStickerPanelPadding).Gap(8).
-			TextColor(ink.text).TransformOrigin(0, 1)
+		panel.AttachTo(button, ui.AnchorTopStart, ui.AnchorBottomStart).Size(privateStickerPanelWidth, 310).TextColor(ink.text)
 		if p.open {
 			panel.Label("选择网易云表情")
 		}
-		a.stylePaneProgress(panel, k)
-		title := p.title()
-		ui.Text(c.Key("sticker-title"), title).FontSize(16).FontWeight(600).Shrink(0).
-			SingleLine().Label("表情分组：" + title)
-		if p.emoji || p.smallEmoji || p.classic {
-			a.privateEmojiGrid(c, chat, ink)
-			a.privateStickerTabs(c, ink)
-			return
-		}
-		ui.Scroll(c.Key("sticker-grid")).Grow(1).MinHeight(0).Gap(5).TrackScroll(&p.scroll).Children(func() {
-			passive := !p.open || p.loading && p.pageGroup != p.group
-			ui.Row(c.Key("sticker-tiles")).Wrap().Gap(5).AlignItems(ui.Center).Children(func() {
-				for _, sticker := range p.page.Items {
-					a.privateStickerTile(c, chat, sticker, passive, ink)
+		a.growInside(c, panel, key, k, p.open, from, 14, 20, privateStickerPanelWidth, 310, func(body ui.Element) {
+			body.Padding(privateStickerPanelPadding).Gap(8)
+			body.Children(func() {
+				title := p.title()
+				ui.Text(c.Key("sticker-title"), title).FontSize(16).FontWeight(600).Shrink(0).
+					SingleLine().Label("表情分组：" + title)
+				if p.emoji || p.smallEmoji || p.classic {
+					a.privateEmojiGrid(c, chat, ink)
+					a.privateStickerTabs(c, ink)
+					return
 				}
-			})
-			err := p.err
-			if p.group == "" {
-				err = p.groupsErr
-			}
-			switch {
-			case p.loading || p.group == "" && p.groupsLoading:
-				ui.Text(c, "正在加载表情…").FontSize(12).TextColor(ink.muted)
-			case err != "":
-				ui.Text(c, err).FontSize(12).TextColor(ink.muted)
-				textLink(c.Key("sticker-retry"), "重试", ink.text).Label("重试加载表情").OnClick(func() {
-					if !p.open {
-						return
-					}
+				ui.Scroll(c.Key("sticker-grid")).Grow(1).MinHeight(0).Gap(5).TrackScroll(&p.scroll).Children(func() {
+					passive := !p.open || p.loading && p.pageGroup != p.group
+					ui.Row(c.Key("sticker-tiles")).Wrap().Gap(5).AlignItems(ui.Center).Children(func() {
+						for _, sticker := range p.page.Items {
+							a.privateStickerTile(c, chat, sticker, passive, ink)
+						}
+					})
+					err := p.err
 					if p.group == "" {
-						a.loadPrivateStickerGroups()
-					} else {
-						a.loadPrivateStickerPage()
+						err = p.groupsErr
+					}
+					switch {
+					case p.loading || p.group == "" && p.groupsLoading:
+						ui.Text(c, "正在加载表情…").FontSize(12).TextColor(ink.muted)
+					case err != "":
+						ui.Text(c, err).FontSize(12).TextColor(ink.muted)
+						textLink(c.Key("sticker-retry"), "重试", ink.text).Label("重试加载表情").OnClick(func() {
+							if !p.open {
+								return
+							}
+							if p.group == "" {
+								a.loadPrivateStickerGroups()
+							} else {
+								a.loadPrivateStickerPage()
+							}
+						})
+					case p.page.Cursor != "":
+						// A short page can have a cursor without providing anything to scroll.
+						textLink(c.Key("sticker-more"), "加载更多表情", ink.text).OnClick(func() {
+							if p.open {
+								a.loadPrivateStickerPage()
+							}
+						})
+						if p.open && p.scroll.Y > 0 && p.scroll.MaxY-p.scroll.Y <= 20 {
+							a.loadPrivateStickerPage()
+						}
+					case len(p.page.Items) == 0:
+						ui.Text(c, "暂无可用表情").FontSize(12).TextColor(ink.muted)
 					}
 				})
-			case p.page.Cursor != "":
-				// A short page can have a cursor without providing anything to scroll.
-				textLink(c.Key("sticker-more"), "加载更多表情", ink.text).OnClick(func() {
-					if p.open {
-						a.loadPrivateStickerPage()
-					}
-				})
-				if p.open && p.scroll.Y > 0 && p.scroll.MaxY-p.scroll.Y <= 20 {
-					a.loadPrivateStickerPage()
-				}
-			case len(p.page.Items) == 0:
-				ui.Text(c, "暂无可用表情").FontSize(12).TextColor(ink.muted)
-			}
+				a.privateStickerTabs(c, ink)
+			})
 		})
-		a.privateStickerTabs(c, ink)
 	}
 	if p.open {
 		ui.PopoverBase(c.Key(key), button, &p.open, content)
 	} else {
 		// Keep the anchored surface in front of the dialog without the popover's dismissal scope.
 		ui.Overlay(c, func() {
-			panel := ui.Box(c.Key(key)).PassThrough()
+			panel := ui.Box(c.Key(key)).Inert()
 			panel.Children(func() { content(panel) })
 		})
 	}

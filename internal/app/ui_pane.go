@@ -35,23 +35,39 @@ func (a *app) pane(e ui.Element, radius float32, onDark bool) ui.Element {
 	return a.paneSurface(e, radius, onDark)
 }
 
+// paneGrowing is pane for a pane on its way to its size, whose shorter side
+// there is basis: its glass is the one of that size all the way, rather
+// than changing, blurring more and more, with each size on the way.
+func (a *app) paneGrowing(e ui.Element, radius float32, onDark bool, basis float32) ui.Element {
+	e.Shadow(0, 18, 44, -12, ui.RGBA(0, 0, 0, 0.45))
+	return a.paneSurfaceAt(e, radius, onDark, basis)
+}
+
 // paneSurface is pane without its shadow, for a pane that casts its own.
 func (a *app) paneSurface(e ui.Element, radius float32, onDark bool) ui.Element {
+	return a.paneSurfaceAt(e, radius, onDark, 0)
+}
+
+// paneSurfaceAt is paneSurface in the material of a pane whose shorter
+// side is basis, if not 0, whatever its size now.
+func (a *app) paneSurfaceAt(e ui.Element, radius float32, onDark bool, basis float32) ui.Element {
 	e.Radius(radius)
 	dark := onDark || a.pal.dark
 	switch {
 	case a.settings.GlobalGlass:
-		return e.Material(a.interfaceGlass(dark))
+		g := a.interfaceGlass(dark)
+		g.basis = basis
+		return e.Material(g)
 	case !a.settings.panelGlass() && dark:
 		return e.Background(ui.Hex("#232327")).Border(0.5, white.Alpha(0.12))
 	case !a.settings.panelGlass():
 		return e.Background(ui.Hex("#f6f6f8")).Border(0.5, ui.RGBA(0, 0, 0, 0.12))
 	case a.pal.dark:
-		return e.Material(glass.Glass{Tint: ui.RGBA(14, 14, 18, 0.62)}).Border(0.5, white.Alpha(0.14))
+		return e.Material(glass.Glass{Tint: ui.RGBA(14, 14, 18, 0.62), Basis: basis}).Border(0.5, white.Alpha(0.14))
 	case onDark:
-		return e.Material(glass.Glass{Tint: ui.RGBA(14, 14, 18, 0.86)}).Border(0.5, white.Alpha(0.14))
+		return e.Material(glass.Glass{Tint: ui.RGBA(14, 14, 18, 0.86), Basis: basis}).Border(0.5, white.Alpha(0.14))
 	}
-	return e.Material(glass.Glass{Tint: ui.RGBA(250, 250, 252, 0.58)}).Border(0.5, ui.RGBA(0, 0, 0, 0.1))
+	return e.Material(glass.Glass{Tint: ui.RGBA(250, 250, 252, 0.58), Basis: basis}).Border(0.5, ui.RGBA(0, 0, 0, 0.1))
 }
 
 // A menuAction is a row of a menu: what it does, or more rows it opens.
@@ -80,6 +96,10 @@ type paneMenu struct {
 	anchored bool
 	closedAt time.Time // when a press outside closed it
 	query    string    // what a long list in it is searched for
+	at       ui.Rect   // where it showed, which it goes from as it closes
+	from     ui.Rect   // what it grows out of: its button, or a little of itself round the pointer
+	fromR    float32   // the corner radius of from
+	source   uint64    // the element pressed for it with the secondary button, which keeps its hover
 }
 
 // menuSearchFrom is how many rows a menu's list has for a search over it:
@@ -215,67 +235,95 @@ func (a *app) contextMenu(el ui.Element, onDark bool, groups func() [][]menuActi
 	x, y, _ := el.PointerPosition()
 	r := el.Bounds()
 	a.openMenu(r.X+x, r.Y+y, r.Y+y, onDark, groups(), head)
+	a.menu.source = el.ID()
 }
 
-// menuOverlay builds the menu open, if one is.
+// menuOverlay builds the menu open, if one is: grown out of the button that
+// opened it, or out of the pointer, and going back into it as it closes.
 func (a *app) menuOverlay(c *ui.Context) {
 	m := &a.menu
-	if !m.open {
+	k := a.growK(c, "menu", m.open, growOpen)
+	if !m.open && k <= growGone {
+		m.source = 0
 		return
-	}
-	if m.anchored {
-		r := m.anchor.Bounds(c)
-		if e := c.Resolve(m.anchor); e.Valid() {
-			r = e.LayoutBounds()
-		}
-		if r.W <= 0 || r.H <= 0 {
-			m.open, m.sub = false, nil
-			return
-		}
-		m.x, m.y, m.up = r.X, r.Y+r.H+8, r.Y-8
 	}
 	w, h := c.Size()
 	ink := a.inkOn(m.onDark)
-	x, y := min(max(m.x, 8), w-menuWidth-8), m.y
-	if tall := m.height(h); y+tall > h-8 {
-		y = max(m.up-tall, 8)
-	}
-	ui.Overlay(c, func() {
-		// It grows from where it was opened.
-		originY := float32(0)
-		if y != m.y {
-			originY = 1
-		}
-		panel := ui.Column(c.Key("pane-menu")).Absolute().Left(x).Top(y).Width(menuWidth).Padding(6).Gap(1).TextColor(ink.text).
-			Role(ui.RoleMenu).FocusGroup(ui.Vertical).Label("菜单").TransformOrigin(clamp01((m.x-x)/menuWidth), originY)
-		a.paneMotion(panel)
-		a.pane(panel, 20, m.onDark)
-		panel.Children(func() {
-			if sub := m.sub; sub != nil {
-				if a.menuRow(c.Key("back"), menuAction{label: "返回", title: sub.label, icon: iconBack}, false, ink).Clicked() {
-					m.sub, m.query = nil, ""
-				}
-				menuLine(c.Key("back-line"), ink)
-				a.menuSearch(c, ink)
-				ui.Scroll(c.Key("menu-list")).MaxHeight(menuListHeight).Gap(1).Children(func() { a.menuGroups(c, matching(sub.sub, m.query), ink) })
+	x, y := m.at.X, m.at.Y
+	if m.open {
+		var button ui.Rect
+		if m.anchored {
+			r := m.anchor.Bounds(c)
+			if e := c.Resolve(m.anchor); e.Valid() {
+				r = e.LayoutBounds()
+			}
+			if r.W <= 0 || r.H <= 0 {
+				m.open, m.sub = false, nil
 				return
 			}
-			if m.head != nil {
-				m.head(c, ink)
-				menuLine(c.Key("head-line"), ink)
+			m.x, m.y, m.up = r.X, r.Y+r.H+8, r.Y-8
+			button = r
+		}
+		x, y = min(max(m.x, 8), w-menuWidth-8), m.y
+		tall := m.height(h)
+		if y+tall > h-8 {
+			y = max(m.up-tall, 8)
+		}
+		if g := a.growKeep("menu"); g.h > 0 && m.at.W > 0 {
+			tall = g.h // as laid out, once it has been
+		}
+		m.at = ui.Rect{X: x, Y: y, W: menuWidth, H: tall}
+		if button.W > 0 {
+			m.from, m.fromR = button, min(min(button.W, button.H)/2, 14)
+		} else {
+			// Out of the pointer: a little of itself round it, as the
+			// menus grew.
+			ox, oy := m.x, m.y
+			if y != m.y {
+				oy = y + tall
 			}
-			a.menuSearch(c, ink)
-			groups := matching(m.groups, m.query)
-			if room := m.room(h); menuRows(m.groups) > room {
-				ui.Scroll(c.Key("menu-groups")).MaxHeight(room).Gap(1).Children(func() { a.menuGroups(c, groups, ink) })
-			} else {
-				a.menuGroups(c, groups, ink)
-			}
+			const s = 0.86
+			m.from = ui.Rect{X: ox + (x-ox)*s, Y: oy + (y-oy)*s, W: menuWidth * s, H: tall * s}
+			m.fromR = 20
+		}
+	}
+	ui.Overlay(c, func() {
+		spec := growSpec{key: "menu", k: k, open: m.open, from: m.from, fromRadius: m.fromR, full: ui.Rect{X: x, Y: y, W: menuWidth}, guess: m.at.H, radius: 20, onDark: m.onDark}
+		shape, _ := a.growPane(c, spec, func(panel ui.Element) {
+			panel.Padding(6).Gap(1).TextColor(ink.text).Role(ui.RoleMenu).FocusGroup(ui.Vertical).Label("菜单")
+			panel.Children(func() {
+				if sub := m.sub; sub != nil {
+					if a.menuRow(c.Key("back"), menuAction{label: "返回", title: sub.label, icon: iconBack}, false, ink).Clicked() {
+						m.sub, m.query = nil, ""
+					}
+					menuLine(c.Key("back-line"), ink)
+					a.menuSearch(c, ink)
+					ui.Scroll(c.Key("menu-list")).MaxHeight(menuListHeight).Gap(1).Children(func() { a.menuGroups(c, matching(sub.sub, m.query), ink) })
+					return
+				}
+				if m.head != nil {
+					m.head(c, ink)
+					menuLine(c.Key("head-line"), ink)
+				}
+				a.menuSearch(c, ink)
+				groups := matching(m.groups, m.query)
+				if room := m.room(h); menuRows(m.groups) > room {
+					ui.Scroll(c.Key("menu-groups")).MaxHeight(room).Gap(1).Children(func() { a.menuGroups(c, groups, ink) })
+				} else {
+					a.menuGroups(c, groups, ink)
+				}
+			})
 		})
-		if panel.PressedOutside() || panel.OverlayShortcut(0, ui.KeyEscape) {
+		if m.open && (shape.PressedOutside() || shape.OverlayShortcut(0, ui.KeyEscape)) {
 			m.open, m.sub, m.query, m.closedAt = false, nil, "", time.Now()
 		}
 	})
+}
+
+// menuHeld reports whether el is what the menu open was opened for with the
+// secondary button: it keeps its hover while the menu shows, as on macOS.
+func (a *app) menuHeld(el ui.Element) bool {
+	return a.menu.source != 0 && a.menu.source == el.ID() && a.menu.open
 }
 
 // menuSearch searches a long list of the menu open, as of the playlists to
@@ -306,11 +354,12 @@ func (a *app) menuGroups(c *ui.Context, groups [][]menuAction, ink paneInk) {
 			menuLine(c.Key(i), ink)
 		}
 		for _, act := range group {
-			if a.menuRow(c, act, act.sub != nil, ink).Clicked() {
+			if row := a.menuRow(c, act, act.sub != nil, ink); row.Clicked() {
 				if act.sub != nil {
 					a.menu.sub, a.menu.query = &act, ""
 				} else {
 					a.menu.open, a.menu.sub, a.menu.query = false, nil, ""
+					a.pressedFrom(row, 14)
 					act.do()
 				}
 			}
@@ -378,23 +427,79 @@ func (a *app) paneSelect(c *ui.Context, label string, selected *string, options 
 		font(ui.Text(c, *selected).FontSize(13).SingleLine().Grow(1).Shrink(1).MinWidth(0).TextColor(ink.text), *selected)
 		ui.Icon(c, iconUpDown).Size(13, 13).Shrink(0).TextColor(ink.faint)
 	})
-	sel.Popup(func(panel ui.Element) {
-		panel.Width(190).Margin(6, 0, 0, 0).Padding(6).Gap(1).TextColor(ink.text).TransformOrigin(0.5, 0)
-		a.pane(panel, 20, false)
-		a.paneMotion(panel)
-		for _, o := range options {
-			item := sel.Item(o).Height(34).PaddingX(10).Gap(8).Radius(14).AlignItems(ui.Center)
-			if item.Highlighted() {
-				item.Background(ink.hover)
-			}
-			item.Children(func() {
-				font(ui.Text(c, o).FontSize(13).SingleLine().Grow(1).Shrink(1).MinWidth(0), o)
-				if o == *selected {
-					ui.Icon(c, iconCheck).Size(14, 14).Shrink(0).TextColor(a.pal.accent)
+	// The list grows out of the button, and goes back into it: the select
+	// builds it no more once it closes, so it goes as rows built where it
+	// was (growGhost).
+	key := "select:" + label
+	open := sel.Open()
+	grown := a.growK(c, key, open, growOpen)
+	from := sel.Trigger.Bounds()
+	const rowH, rowGap, pad = 34, 1, 6
+	list := func(item func(o string) ui.Element, after func()) func(body ui.Element) {
+		return func(body ui.Element) {
+			body.Padding(pad).Gap(rowGap)
+			body.Children(func() {
+				for _, o := range options {
+					row := item(o).Height(rowH).PaddingX(10).Gap(8).Radius(14).AlignItems(ui.Center)
+					row.Children(func() {
+						font(ui.Text(c, o).FontSize(13).SingleLine().Grow(1).Shrink(1).MinWidth(0), o)
+						if o == *selected {
+							ui.Icon(c, iconCheck).Size(14, 14).Shrink(0).TextColor(a.pal.accent)
+						}
+					})
+				}
+				if after != nil {
+					after()
 				}
 			})
 		}
+	}
+	sel.Popup(func(panel ui.Element) {
+		panel.Width(190).Margin(6, 0, 0, 0).TextColor(ink.text)
+		a.growInside(c, panel, key, grown, true, from, 16, 20, 190, 0, func(body ui.Element) {
+			// The highlight slides from row to row under the pointer,
+			// rising into a lens of liquid glass on its way, or as its row
+			// is held, and landing as it gets there.
+			liquid := a.liquidOK()
+			hl, held, i := -1, false, 0
+			var pos, lift float32
+			if liquid {
+				body.Draw(func(p *ui.Painter, b ui.Rect) {
+					if hl < 0 || lift >= 0.999 {
+						return
+					}
+					f := ink.hover
+					p.Fill(ui.Rect{X: b.X + pad, Y: b.Y + pad + pos*(rowH+rowGap), W: b.W - 2*pad, H: rowH}, f.Alpha(1-lift), 14)
+				})
+			}
+			list(func(o string) ui.Element {
+				item := sel.Item(o)
+				if item.Highlighted() {
+					hl, held = i, item.Pressed()
+					if !liquid {
+						item.Background(ink.hover)
+					}
+				}
+				i++
+				return item
+			}, func() {
+				if !liquid || hl < 0 {
+					return
+				}
+				pos = body.AnimateTo("hl", float32(hl), lensSlide)
+				lift = lensLift(body, pos, float32(hl), held)
+				if lift > 0.01 {
+					a.liquidLens(c, "hl-lens", ui.Rect{X: pad, Y: pad + pos*(rowH+rowGap), W: 190 - 2*pad, H: rowH}, lift, 0.04, 0.2)
+				}
+			})(body)
+		})
 	})
+	if !open {
+		a.growGhost(c, key, grown, from, 16, 20, 190, 0, func(body ui.Element) {
+			body.TextColor(ink.text)
+			list(func(o string) ui.Element { return ui.Row(c.Key(o)) }, nil)(body)
+		})
+	}
 	return *selected != before
 }
 

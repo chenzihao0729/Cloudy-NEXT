@@ -139,12 +139,15 @@ func (a *app) userPage(c *ui.Context) {
 			ui.Box(c).Size(artistPhotoSize, artistPhotoSize).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
 				a.coverFill(c, u.AvatarURL, 600, artistPhotoSize/2)
 			})
-			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
+			info := ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8)
+			a.loadedIn(info, 0)
+			info.Children(func() {
 				ui.Text(c, "用户").FontSize(12).FontWeight(600).TextColor(p.accent)
 				ui.Text(c, u.Nickname).FontSize(30).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
 				ui.Text(c, fmt.Sprintf("%s 关注 · %s 粉丝", count(u.Follows), count(u.Followeds))).FontSize(13).TextColor(p.muted)
 				if a.profile != nil && !own {
-					if pillButton(c.Key("private-message"), iconComment, "发私信", p.hover, p.text).Clicked() {
+					if b := pillButton(c.Key("private-message"), iconComment, "发私信", p.hover, p.text); b.Clicked() {
+						a.growFrom("private-messages", b, 14)
 						a.openPrivateMessages(&netease.MessageUser{UserID: id, Nickname: u.Nickname, AvatarURL: u.AvatarURL})
 					}
 				}

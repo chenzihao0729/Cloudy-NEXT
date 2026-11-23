@@ -99,7 +99,9 @@ type app struct {
 	myAlbumsErr  string
 	myAlbumsBusy bool
 	login        loginState
-	accountOpen  bool // the dropdown of the account row shows
+	accountOpen  bool      // the dropdown of the account row shows
+	accountMenuH float32   // the account menu's full height, as last laid out
+	accountShut  time.Time // when a press outside put the account menu away
 	dm           privateMessagesState
 	naming       nameDialog     // the name of a playlist asked for
 	deleting     deleteDialog   // whether to delete a playlist, asked
@@ -164,22 +166,24 @@ type app struct {
 	albumsCollapsed               bool
 	mineView                      mineView // the search on the listener's page, and the kinds opened on it
 
-	query       string
-	searchBox   ui.Handle
-	filterBox   ui.Handle             // the search among a playlist's songs
-	searches    map[route]*searchData // the results of each search, by its page
-	searched    route                 // the search last shown, which the sidebar goes back to
-	suggestions suggestState          // what the search field's query may be after
+	query        string
+	searchBox    ui.Handle
+	filterBox    ui.Handle             // the search among a playlist's songs
+	searches     map[route]*searchData // the results of each search, by its page
+	pageSeen     map[route]time.Time   // when each page kept loaded last showed (trimPageCaches)
+	searched     route                 // the search last shown, which the sidebar goes back to
+	suggestions  suggestState          // what the search field's query may be after
+	suggestShown suggestShown          // what the search field's popup showed last, as it goes
 
 	nowPlaying   bool
-	npFull       bool        // Now Playing taking the whole screen
-	fullHintAt   time.Time   // when the bubble telling of F11 first showed in this run
-	sysAccent    string      // the desktop's accent as #RRGGBB, "" where it has none
-	npOpen       bool        // Now Playing as it last showed: open or not
-	npChangedAt  time.Time   // when it last opened or closed
-	releaseT     *time.Timer // gives memory back after a view goes (releaseSoon)
-	npPane       int         // paneLyrics, paneQueue, paneStage, paneComments, paneProgram, paneCaptions, paneWall or paneWiki
-	npPaneTop    float32     // how far the cover beside the pane starts below its top
+	npFull       bool       // Now Playing taking the whole screen
+	fullHintAt   time.Time  // when the bubble telling of F11 first showed in this run
+	sysAccent    string     // the desktop's accent as #RRGGBB, "" where it has none
+	npOpen       bool       // Now Playing as it last showed: open or not
+	npChangedAt  time.Time  // when it last opened or closed
+	mem          memRelease // memory given back when the app is quiet (releaseSoon)
+	npPane       int        // paneLyrics, paneQueue, paneStage, paneComments, paneProgram, paneCaptions, paneWall or paneWiki
+	npPaneTop    float32    // how far the cover beside the pane starts below its top
 	lyricScroll  ui.ScrollState
 	lyricGlide   lyricGlide
 	lyricWheel   float32   // the wheel over a lyric value, short of a step
@@ -218,15 +222,18 @@ type app struct {
 	underTop, underBottom bool
 	barScrub              scrubState
 	npScrub               scrubState
-	glowColor             ui.Color         // the color of Now Playing's glow, from the cover's
-	menu                  paneMenu         // the menu open, if one is (ui_pane.go)
-	npPill                ui.Rect          // where the tab chosen is, in the row of tabs
-	barBox                ui.Rect          // where the player bar is, which Now Playing grows from
-	barSpot, npSpot       flightSpot       // what stays as it grows, in the bar and in the view
-	npK                   float32          // how far Now Playing has opened, from 0 to 1
-	npCoverScale          float32          // how its cover stands, which the flight lands at
-	motion                int              // how much the app moves, in this frame
-	dialogScaling         bool             // the dialog being built grows in (scalingBody)
+	glowColor             ui.Color   // the color of Now Playing's glow, from the cover's
+	menu                  paneMenu   // the menu open, if one is (ui_pane.go)
+	npPill                ui.Rect    // where the tab chosen is, in the row of tabs
+	barBox                ui.Rect    // where the player bar is, which Now Playing grows from
+	barSpot, npSpot       flightSpot // what stays as it grows, in the bar and in the view
+	npK                   float32    // how far Now Playing has opened, from 0 to 1
+	npCoverScale          float32    // how its cover stands, which the flight lands at
+	motion                int        // how much the app moves, in this frame
+	mk                    motionKit  // what the motion of the app keeps from frame to frame (motion_kit.go)
+	dialogScaling         bool       // the dialog being built grows in (scalingBody)
+	dialogFlying          bool       // the dialog being built flies out of what opened it, dialogFlyK of the way
+	dialogFlyK            float32
 	playFlies             func(ui.Element) // what hides the play button being built as it flies
 	pageDir               int              // the way the page last changed: 1 in, -1 back, 0 across
 	feedback              feedbackState    // the message being written, in the settings
@@ -404,6 +411,7 @@ func Run() error {
 	a.useUpdater()
 	mygo.App.WhenReady(func() {
 		a.settings = loadSettings()
+		a.applyUpdateSource()
 		a.applyOutput()
 		a.settings.applyAppearance()
 		a.loadFont()
@@ -506,6 +514,7 @@ func Run() error {
 		a.win.OnHide(func() {
 			a.syncDock()
 			a.privateWindowPaused()
+			a.releaseHidden(true)
 		})
 		// Shown or switched to the morning after, it shows the new day's.
 		a.win.OnFocus(func() {
@@ -514,12 +523,17 @@ func Run() error {
 		})
 		a.win.OnBlur(func() {
 			a.privateWindowBlur(time.Now())
+			a.releaseAfter(blurDelay, eventWorth)
 		})
-		a.win.OnMinimize(a.privateWindowPaused)
+		a.win.OnMinimize(func() {
+			a.privateWindowPaused()
+			a.releaseHidden(false)
+		})
 		a.win.OnRestore(func() {
 			a.privateWindowRestored(time.Now())
 		})
 		a.listenForDrops()
+		a.watchQuiet()
 		a.loadLibraryLater()
 		a.applyTray()
 		a.applyDeskLyrics()

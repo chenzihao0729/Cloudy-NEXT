@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -359,7 +358,7 @@ func (a *app) queueRow(c *ui.Context, q *queueWindow, spec *queueSpec, e queueEn
 	} else if row.Hovered() {
 		bg = pal.hover
 	}
-	row.Background(row.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+	row.Background(row.AnimateColor("bg", bg, motionHover))
 	row.Children(func() {
 		a.batchCheck(c, selected)
 		if e.cover != "" {

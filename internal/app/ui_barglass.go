@@ -30,6 +30,12 @@ type barGlass struct {
 	clear, bend float32
 	surface     bool // use the same optics on a rounded panel
 	translucent bool // let the native window material show through
+	// basis, for a pane on its way to its size, as one growing out of a
+	// button, is the smaller side it has there: its rim bends what shows
+	// through as it will there, the same all the way, rather than as each
+	// size on the way would have it, which made what shows through its
+	// edges swim and shake as it grew.
+	basis float32
 }
 
 func (a *app) interfaceGlass(dark bool) barGlass {
@@ -190,12 +196,22 @@ func (g barGlass) PaintMaterial(p *ui.Painter, box ui.Rect, radii [4]float32) {
 	if g.translucent {
 		film = lerp(0.8, 0.36, clamp01(g.clear))
 	}
+	side := min(box.W, box.H)
+	if g.basis > 0 {
+		side = g.basis
+	}
 	if g.surface {
 		surface = 1
-		bend = min(bend, 1.2*min(box.W, box.H)*g.bend, 76*g.bend)
+		bend = min(bend, 1.2*side*g.bend, 76*g.bend)
+	}
+	// The shader's bezel is a share of the smaller half of the pane: for a
+	// basis, the share that makes it as wide as there, within the pane.
+	bezel := float32(0.33 + 0.66*g.bend)
+	if now := min(box.W, box.H); g.basis > 0 && now > 0 {
+		bezel = min(bezel*g.basis/now, 1)
 	}
 	options := shader.Options{Radius: radii[0], BackdropBlur: blur, Uniforms: map[string]any{
-		"Bend": bend, "Bezel": 0.33 + 0.66*g.bend, "Spread": barGlassSpread,
+		"Bend": bend, "Bezel": bezel, "Spread": barGlassSpread,
 		"Rim": barGlassRim, "RimWide": barGlassRimWide, "Tone": tone[:], "Ink": ink[:],
 		"Corner": radii[0], "Surface": surface, "Film": film,
 	}}

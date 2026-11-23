@@ -82,12 +82,14 @@ func (a *app) queueRows(c *ui.Context, list *ui.ListState, at *int, look queueLo
 			}
 			return acts
 		}, a.songHead(tr))
+		bg := look.hover.Alpha(0)
 		switch {
 		case playing:
-			row.Background(look.on)
-		case row.Hovered():
-			row.Background(look.hover)
+			bg = look.on
+		case row.Hovered() || a.menuHeld(row):
+			bg = look.hover
 		}
+		row.Background(row.AnimateColor("bg", bg, motionHover))
 		if !canPlay {
 			row.Opacity(0.4)
 		}
@@ -126,34 +128,53 @@ func (a *app) queueButton(c *ui.Context, color ui.Color, size float32) {
 	}
 	b := iconButton(c.Key("queue-button"), iconQueue, size, tint, "播放列表").Tooltip("播放列表")
 	if b.Clicked() {
-		q.open = !q.open
+		switch {
+		case q.open:
+			q.open = false
+		case !a.growJustShut("queue"):
+			q.open = true
+		}
 	}
 	if !q.open {
 		q.at = -1
 	}
-	ui.PopoverBase(c.Key("queue-popover"), b, &q.open, func(panel ui.Element) {
-		ink := a.inkOn(false)
-		a.pane(panel, 20, false)
-		h := a.winHeight(c)
-		panel.AttachTo(b, ui.AnchorTopEnd, ui.AnchorBottomEnd).Margin(0, 0, 12, 0).Width(400).Height(max(240, min(600, h-160))).
-			Padding(10, 8, 0, 8).TextColor(ink.text).Label("播放列表").TransformOrigin(1, 1)
-		a.paneMotion(panel)
-		panel.Children(func() {
-			ui.Row(c).PaddingX(10).Height(30).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "播放列表").FontSize(15).FontWeight(700).Grow(1)
-				if iconButton(c.Key("queue-close"), iconX, 12, ink.muted, "关闭").Size(26, 26).Clicked() {
-					q.open = false
+	// It grows out of its button, up and to the left, and goes back into it.
+	k := a.growK(c, "queue", q.open, growOpen)
+	if !q.open && k <= growGone {
+		return
+	}
+	r := b.Bounds()
+	if r.W <= 0 || r.H <= 0 {
+		return
+	}
+	ink := a.inkOn(false)
+	h := max(240, min(600, a.winHeight(c)-160))
+	full := ui.Rect{X: r.X + r.W - 400, Y: r.Y - 12 - h, W: 400, H: h}
+	ui.Overlay(c, func() {
+		spec := growSpec{key: "queue", k: k, open: q.open, from: r, fromRadius: min(r.H/2, 14), full: full, radius: 20}
+		shape, _ := a.growPane(c, spec, func(panel ui.Element) {
+			panel.Padding(10, 8, 0, 8).TextColor(ink.text).Label("播放列表")
+			panel.Children(func() {
+				ui.Row(c).PaddingX(10).Height(30).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, "播放列表").FontSize(15).FontWeight(700).Grow(1)
+					if iconButton(c.Key("queue-close"), iconX, 12, ink.muted, "关闭").Size(26, 26).Clicked() {
+						q.open = false
+					}
+				})
+				if len(a.pl.Queue()) == 0 {
+					a.queueEmpty(c, ink)
+					return
 				}
+				a.queueRows(c, &q.list, &q.at, queueLook{
+					text: ink.text, head: ink.muted, artist: ink.muted, time: ink.faint,
+					on: a.pal.accent.Alpha(0.12), hover: ink.hover, pill: ink.hover,
+				}, 52, 38)
 			})
-			if len(a.pl.Queue()) == 0 {
-				a.queueEmpty(c, ink)
-				return
-			}
-			a.queueRows(c, &q.list, &q.at, queueLook{
-				text: ink.text, head: ink.muted, artist: ink.muted, time: ink.faint,
-				on: a.pal.accent.Alpha(0.12), hover: ink.hover, pill: ink.hover,
-			}, 52, 38)
 		})
+		if q.open && (shape.PressedOutside() || shape.OverlayShortcut(0, ui.KeyEscape)) {
+			q.open = false
+			a.growShut("queue")
+		}
 	})
 }
 

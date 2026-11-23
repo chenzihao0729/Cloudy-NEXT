@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -37,7 +39,38 @@ type updateState struct {
 // plugin, whose plain UI sat apart from the app's glass.
 func (a *app) useUpdater() {
 	a.updates = true
-	mygo.Updater.SetMirrors(updateMirrors...)
+	a.applyUpdateSource()
+}
+
+// updateSources are the sources the listener may download updates from, in
+// the settings, as UpdateSource holds them: the first tries GitHub and then
+// each mirror, the others keep to one.
+func updateSources() []struct{ source, label string } {
+	sources := []struct{ source, label string }{
+		{"", "自动"},
+		{"github", "官方源"},
+	}
+	for i, m := range updateMirrors {
+		sources = append(sources, struct{ source, label string }{m, fmt.Sprintf("镜像源 %d", i+1)})
+	}
+	return sources
+}
+
+// applyUpdateSource has the updater fetch from the source the listener
+// chose. A mirror no longer in updateMirrors, kept from an older version,
+// counts as the automatic choice.
+func (a *app) applyUpdateSource() {
+	switch src := a.settings.UpdateSource; {
+	case src == "github":
+		mygo.Updater.SetMirrors()
+		mygo.Updater.SetMirrorsOnly(false)
+	case src != "" && slices.Contains(updateMirrors, src):
+		mygo.Updater.SetMirrors(src)
+		mygo.Updater.SetMirrorsOnly(true)
+	default:
+		mygo.Updater.SetMirrors(updateMirrors...)
+		mygo.Updater.SetMirrorsOnly(false)
+	}
 }
 
 // checkForUpdates checks for updates as the listener asked, and shows what
@@ -144,7 +177,7 @@ func updateError(err error) string {
 	if errors.Is(err, mygo.ErrUpdatesDisabled) {
 		return "这个版本不能自动更新：开发版，或安装位置不可写。请到 GitHub 下载新版本。"
 	}
-	return "检查更新失败，请检查网络后重试。"
+	return "检查更新失败，请检查网络，或到设置里换一个下载源后重试。"
 }
 
 // autoCheckUpdates looks for updates soon after launch, and then once a day,

@@ -227,7 +227,8 @@ func (a *app) deskFlyView(c *ui.Context) {
 }
 
 // paintDeskFly paints the characters gone into their way, from the button
-// to where they land, and the button lit as they leave it or come back.
+// to where they land, and a ring going out of the button as they leave it
+// or come back.
 func (a *app) paintDeskFly(p *ui.Painter, f *deskFlight, gone time.Duration) {
 	look := a.deskLookOf(a.settings.DeskStyle)
 	pos := a.lyricPos()
@@ -254,24 +255,21 @@ func (a *app) paintDeskFly(p *ui.Painter, f *deskFlight, gone time.Duration) {
 		}
 		return u, turn
 	}, bx, by)
-	// The button, lit, swelling as they leave it, and gone after the last
-	// one; or lit as they come back into it.
+	// A ring goes out from the button as they leave it, or as the last of
+	// them comes back into it: a thin one, around the icon, never over it.
 	accent := a.pal.accent
 	if ca, ok := a.coverAccent(); ok && a.settings.AccentCover {
 		accent = ca
 	}
-	lags := total - deskGlyphFly
-	var lit, swell float32
-	if f.opening {
-		swell = easeRange(float32(gone)/float32(90*time.Millisecond), 0, 1)
-		lit = 1 - easeRange(float32(gone-lags)/float32(deskGlyphFly/3), 0, 1)
-	} else {
-		swell = 1
-		lit = easeRange(float32(gone)/float32(deskGlyphFly), 0.55, 0.8) * (1 - easeRange(float32(total-gone)/float32(deskGlyphFly/4), 1, 0))
+	const ripple = 420 * time.Millisecond
+	at := gone
+	if !f.opening {
+		at = gone - (total - deskGlyphFly/3)
 	}
-	if lit > 0 {
-		r := f.from.H / 2 * (1 + 0.35*swell)
-		p.Fill(ui.Rect{X: bx - r, Y: by - r, W: 2 * r, H: 2 * r}, accent.Alpha(0.9*lit), r)
+	if u := float32(at) / float32(ripple); u >= 0 && u < 1 {
+		e := easeRange(u, 0, 1)
+		r := f.from.H/2 + 2 + 10*e
+		p.Stroke(ui.Rect{X: bx - r, Y: by - r, W: 2 * r, H: 2 * r}, accent.Alpha(0.6*(1-u)), r, 1.5)
 	}
 }
 

@@ -34,7 +34,7 @@ func TestSongMenuCopies(t *testing.T) {
 		if err := tt.Click("更多"); err != nil {
 			t.Fatal(err)
 		}
-		tt.Frame()
+		settle(tt)
 		if err := tt.Click(c.item); err != nil {
 			t.Fatalf("%v; the view shows %q", err, tt.Texts())
 		}
@@ -65,7 +65,7 @@ func TestSongMenuPlaylists(t *testing.T) {
 	if err := tt.Click("更多"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
+	settle(tt)
 	if err := tt.Click("添加到歌单"); err != nil {
 		t.Fatal(err)
 	}
@@ -134,6 +134,35 @@ func TestPlayerBarDetailsMenu(t *testing.T) {
 		if !slices.Contains(tt.Texts(), label) {
 			t.Fatalf("the details menu has no %s: %q", label, tt.Texts())
 		}
+	}
+}
+
+// The player bar's details menu takes the theme, as the bar's other menus
+// do; Now Playing's, over its dark stage, stays dark.
+func TestPlayerBarDetailsMenuTakesTheTheme(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000}})
+	tt := ui.NewTester(a.view, 1200, 800)
+	tt.Frame()
+	if a.pal.dark {
+		t.Fatal("the test app is not in the light theme")
+	}
+	if err := tt.Click("歌曲详情"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.menu.open || a.menu.onDark {
+		t.Fatalf("the bar's details menu: open %v, dark %v; want open and light", a.menu.open, a.menu.onDark)
+	}
+
+	a, tt = coverMenuApp(true)
+	if err := tt.Click("更多"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.menu.open || !a.menu.onDark {
+		t.Fatalf("Now Playing's menu: open %v, dark %v; want open and dark", a.menu.open, a.menu.onDark)
 	}
 }
 

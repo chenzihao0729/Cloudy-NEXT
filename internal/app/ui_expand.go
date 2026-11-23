@@ -268,11 +268,17 @@ func (a *app) paneMotion(panel ui.Element) {
 // it is painted once into a layer that the panel's scale only moves: the
 // clips of the scrolling, rounded and inset parts under a scale were drawn
 // on the CPU at every frame, and opening the settings stuttered (#20). The
-// panel keeps its glass, which sees through as it goes.
+// panel keeps its glass, which sees through as it goes. Flying out of what
+// opened it, the content shows once the glass has come some way.
 func (a *app) scalingBody(c *ui.Context, fn func()) {
 	body := ui.Column(c.Key("scaling-body")).Grow(1).MinHeight(0).AlignItems(ui.Stretch)
 	if a.dialogScaling {
 		body.Cache()
+	}
+	if a.dialogFlying {
+		if f := smoothstep(0.15, 0.6, a.dialogFlyK); f < 1 {
+			body.Opacity(f)
+		}
 	}
 	body.Children(fn)
 }
@@ -287,19 +293,40 @@ func (a *app) dialog(c *ui.Context, key string, dim float32, open *bool, fn func
 }
 
 // Progress belongs to the same channel that paints the dialog. The result
-// reports whether the panel was built, including during its exit.
+// reports whether the panel was built, including during its exit. A dialog
+// opened from a control (growFrom with its key) flies out of it, its glass
+// growing as it goes, and back into it as it closes.
 func (a *app) dialogProgress(c *ui.Context, key string, dim float32, open *bool, fn func(panel ui.Element, progress float32, dismissed bool)) bool {
-	k := a.paneProgress(c, key, *open)
-	if k == 0 && !*open {
+	from, fromR, fly := a.growSource(key, *open)
+	fly = fly && a.motion == motionFull
+	var k float32
+	if fly {
+		if g := a.growKeep(key); *open && !g.laid {
+			k = a.growHold(c, key)
+		} else {
+			k = a.growK(c, key, *open, growOpen)
+		}
+	} else {
+		k = a.paneProgress(c, key, *open, a.growKeep(key).edge)
+	}
+	if k <= 0 && !*open || fly && k <= growGone && !*open {
 		return false
 	}
 	shown := true
 	ui.DialogBase(c.Key(key), &shown, func(backdrop, panel ui.Element) {
-		backdrop.Background(ui.RGBA(0, 0, 0, dim*k))
-		a.dialogScaling = k < 1 && a.motion == motionFull
-		fn(panel, k, !shown)
-		a.dialogScaling = false
-		a.stylePaneProgress(panel, k)
+		backdrop.Background(ui.RGBA(0, 0, 0, dim*clamp01(k)))
+		a.dialogScaling = k < 1 && a.motion == motionFull || fly && (k < 0.999 || k > 1.001)
+		a.dialogFlying, a.dialogFlyK = fly, k
+		fn(panel, clamp01(k), !shown)
+		a.dialogScaling, a.dialogFlying = false, false
+		if fly {
+			if panel.LayoutBounds().W > 0 {
+				a.growKeep(key).laid = true
+			}
+			flyPanel(panel, from, fromR, k, *open)
+		} else {
+			a.stylePaneProgress(panel, k)
+		}
 	})
 	// Settings is a modal workspace: clicking the dimmed area must not close
 	// it, so the only exit is its explicit close button.
@@ -312,8 +339,47 @@ func (a *app) dialogProgress(c *ui.Context, key string, dim float32, open *bool,
 	return true
 }
 
-func (a *app) paneProgress(c *ui.Context, key string, open bool) float32 {
+// flyPanel moves panel, k of the way out of from, rounded by fromR: scaled
+// from the size that covers from to its own, its middle from from's to its
+// place, its corners as round as from's at the start, its glass coming in
+// first. It goes from the layout's box the frame before, which a panel
+// opening has none of yet: then it does not show.
+func flyPanel(panel ui.Element, from ui.Rect, fromR, k float32, open bool) {
+	full := panel.LayoutBounds()
+	if full.W <= 0 || full.H <= 0 {
+		panel.Opacity(0)
+		return
+	}
+	if k >= 1 && k < 1.0005 {
+		return
+	}
+	s0 := min(max(from.W/full.W, from.H/full.H, 0.06), 1)
+	s := lerp(s0, 1, k)
+	t := 1 - k
+	dx := (from.X + from.W/2 - full.X - full.W/2) * t
+	dy := (from.Y + from.H/2 - full.Y - full.H/2) * t
+	panel.TransformOrigin(0.5, 0.5).Scale(s, s).Translate(dx, dy)
+	// The corners as round, on screen, as from's, then the panel's own.
+	if r := lerp(fromR, 26, clamp01(k)) / s; s < 1 {
+		panel.Radius(min(r, min(full.W, full.H)/2))
+	}
+	// Opening, it shows at once, a chip of glass over what opened it, for
+	// the click to be answered as the panel's first frame is drawn; going,
+	// it fades out of sight as it reaches it.
+	f := smoothstep(0, 0.2, k)
+	if open {
+		f = 0.35 + 0.65*f
+	}
+	if f < 1 {
+		panel.Opacity(f)
+	}
+}
+
+func (a *app) paneProgress(c *ui.Context, key string, open bool, again ...bool) float32 {
 	stage := ui.Box(c.Key(key+"-stage")).Absolute().Size(0, 0).PassThrough()
+	if len(again) > 0 && again[0] {
+		stage.Jump("in", 0) // opening again, from closed, not where it was left
+	}
 	k := b2f(open)
 	if a.motion != motionOff {
 		k = clamp01(stage.AnimateTo("in", k, motionPane))
@@ -562,6 +628,15 @@ func (a *app) navRowContent(c *ui.Context, button ui.Element, selected bool, pad
 	})
 }
 
+// navMotion is how the pill goes, and the colors of the rows it goes
+// between with it.
+func navMotion(level int) ui.Animation {
+	if level == motionFull {
+		return motionPane
+	}
+	return motionHover
+}
+
 // navPill is that pill, which slides from the page chosen before.
 func (a *app) navPill(c *ui.Context) {
 	alpha := float32(0.12)
@@ -570,7 +645,8 @@ func (a *app) navPill(c *ui.Context) {
 	}
 	pill := ui.Box(c.Key("nav-pill")).Absolute().Top(0).Left(0).Right(0).Bottom(0).Radius(8).PassThrough().Background(a.pal.accent.Alpha(alpha))
 	if a.motion == motionFull {
-		pill.Transition(ui.ElementTransition{Animation: &motionPane, Match: navPillMatch{}})
+		anim := navMotion(a.motion)
+		pill.Transition(ui.ElementTransition{Animation: &anim, Match: navPillMatch{}})
 	}
 }
 

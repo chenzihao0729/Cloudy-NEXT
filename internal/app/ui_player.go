@@ -223,35 +223,30 @@ func (a *app) volumeButton(c *ui.Context, color ui.Color, size float32) {
 	}
 	b.HandleInput(func(ev ui.InputEvent) bool { return a.scrollVolume(ev) })
 	pop := popoverColors(a.pal.dark)
-	ui.PopoverBase(c.Key("volume-popover"), b, &a.volumeOpen, func(panel ui.Element) {
-		if panel.Hovered() {
-			over = true
-		}
-		const arrow = 7
-		a.pane(panel, 26, false)
-		panel.AttachTo(b, ui.AnchorTop, ui.AnchorBottom).Width(52).Padding(11, 0, 12, 0).
-			AlignItems(ui.Center).Gap(8).Label("音量").TransformOrigin(0.5, 1)
-		a.paneMotion(panel)
-		// Of glass, there is no arrow: what shows through would stop at it.
-		if a.settings.panelGlass() {
-			ui.Textf(c, "%d%%", int(a.volume*100+0.5)).FontSize(11).FontWeight(500).FontFeatures("tnum").TextColor(a.pal.muted)
-			a.nativeVolumeSlider(c, pop)
-			return
-		}
-		panel.Draw(func(p *ui.Painter, r ui.Rect) {
-			// The arrow pointing at the speaker, its sides edged as the
-			// panel is, over the panel's border.
-			cx, foot := r.X+r.W/2, r.Y+r.H
-			tip := (&ui.Path{}).MoveTo(cx-arrow-1, foot-0.75).LineTo(cx-1.2, foot+arrow-1.2).
-				QuadTo(cx, foot+arrow, cx+1.2, foot+arrow-1.2).LineTo(cx+arrow+1, foot-0.75).Close()
-			p.FillPath(tip, pop.fill)
-			edge := (&ui.Path{}).MoveTo(cx-arrow-1, foot).LineTo(cx-1.2, foot+arrow-1.2).
-				QuadTo(cx, foot+arrow, cx+1.2, foot+arrow-1.2).LineTo(cx+arrow+1, foot)
-			p.StrokePath(edge, 0.5, pop.edge)
+	// It grows out of the speaker, up, as a capsule, and goes back into it:
+	// quicker than a pane a click opens, as the pointer passing opens it.
+	k := a.growK(c, "volume", a.volumeOpen, growQuick)
+	if r := b.Bounds(); (a.volumeOpen || k > growGone) && r.W > 0 && r.H > 0 {
+		const w, tall = 52, 172
+		full := ui.Rect{X: r.X + r.W/2 - w/2, Y: r.Y - tall, W: w, H: tall}
+		ui.Overlay(c, func() {
+			spec := growSpec{key: "volume", k: k, open: a.volumeOpen, from: r, fromRadius: min(r.H/2, 14), full: full, radius: 26}
+			shape, _ := a.growPane(c, spec, func(panel ui.Element) {
+				panel.Padding(11, 0, 12, 0).AlignItems(ui.Center).Gap(8).Label("音量")
+				panel.Children(func() {
+					ui.Textf(c, "%d%%", int(a.volume*100+0.5)).FontSize(11).FontWeight(500).FontFeatures("tnum").TextColor(a.pal.muted)
+					a.nativeVolumeSlider(c, pop)
+				})
+			})
+			if shape.Hovered() {
+				over = true
+			}
+			// A press on the speaker mutes, and keeps it open.
+			if a.volumeOpen && ((shape.PressedOutside() && !over) || shape.OverlayShortcut(0, ui.KeyEscape)) {
+				a.volumeOpen, h.byHover = false, false
+			}
 		})
-		ui.Textf(c, "%d%%", int(a.volume*100+0.5)).FontSize(11).FontWeight(500).FontFeatures("tnum").TextColor(a.pal.muted)
-		a.nativeVolumeSlider(c, pop)
-	})
+	}
 	if a.volumeOpen && h.byHover && !over {
 		a.volumeOpen, h.byHover = false, false
 	}
@@ -676,9 +671,9 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 			a.volumeButton(c, p.text.Alpha(0.75), toolIcon)
 			if tr != nil {
 				if compact {
-					a.songMenuLabeled(c.Key("details"), tr, toolIcon, muted, "歌曲详情", a.compactPlayerActions(tr))
+					a.songMenuLabeled(c.Key("details"), tr, false, toolIcon, muted, "歌曲详情", a.compactPlayerActions(tr))
 				} else {
-					a.songMenuLabeled(c.Key("details"), tr, toolIcon, muted, "歌曲详情")
+					a.songMenuLabeled(c.Key("details"), tr, false, toolIcon, muted, "歌曲详情")
 				}
 			}
 		})

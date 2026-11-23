@@ -36,6 +36,7 @@ func TestPlaylistDetailsMenu(t *testing.T) {
 	if !tt.HasText("批量操作") || !tt.HasText("分享") {
 		t.Fatalf("details menu: %q", tt.Texts())
 	}
+	settle(tt)
 	if err := chooseItem(tt, "批量操作"); err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +49,7 @@ func TestPlaylistDetailsMenu(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
+	settle(tt)
 	if err := chooseItem(tt, "分享"); err != nil {
 		t.Fatal(err)
 	}
@@ -71,6 +73,7 @@ func TestPlaylistBatchInPage(t *testing.T) {
 	if err := tt.Click("歌单详情"); err != nil {
 		t.Fatal(err)
 	}
+	settle(tt)
 	if err := chooseItem(tt, "批量操作"); err != nil {
 		t.Fatal(err)
 	}
@@ -129,6 +132,7 @@ func TestPlaylistBatchInlineDownload(t *testing.T) {
 	if err := tt.Click("歌单详情"); err != nil {
 		t.Fatal(err)
 	}
+	settle(tt)
 	if err := chooseItem(tt, "批量操作"); err != nil {
 		t.Fatal(err)
 	}
@@ -197,6 +201,7 @@ func TestLikedPlaylistBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
+	settle(tt)
 	if err := chooseItem(tt, "批量操作"); err != nil {
 		t.Fatal(err)
 	}

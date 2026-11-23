@@ -76,9 +76,6 @@ func (a *app) shortcutEditorDialog(c *ui.Context) {
 		s.recording = ""
 	}
 	a.pauseKeys(s.recording != "")
-	if !s.open {
-		return
-	}
 	ink := a.inkOn(false)
 	w, h := c.Size()
 	a.dialog(c, "shortcut-editor", 0.35, &s.open, func(panel ui.Element) {

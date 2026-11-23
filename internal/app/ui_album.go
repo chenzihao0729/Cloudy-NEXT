@@ -62,7 +62,9 @@ func (a *app) albumHeader(c *ui.Context, al *netease.AlbumProfile) {
 	p := a.pal
 	ui.Row(c).Gap(28).AlignItems(ui.End).Padding(0, 0, 26, 0).Children(func() {
 		a.headCover(c, al.PicURL)
-		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
+		info := ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8)
+		a.loadedIn(info, 0)
+		info.Children(func() {
 			ui.Text(c, "专辑").FontSize(12).FontWeight(600).TextColor(p.accent)
 			ui.Text(c, al.Name).FontSize(30).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
 			ui.RichText(c).FontSize(13).TextColor(p.muted).Children(func() {
@@ -123,7 +125,7 @@ func (a *app) albumCard(c *ui.Context, al *netease.AlbumProfile) ui.Element {
 		} else {
 			art.Shadow(0, 2, 8, -2, p.cardShade)
 		}
-		art.AnimatePose(lift, ui.Snappy)
+		art.AnimatePose(a.pressedLift(card, lift), motionPress)
 		art.Children(func() { a.coverFill(c, al.PicURL, 400, 14) })
 		ui.Text(c, al.Name).FontSize(13).FontWeight(500).MaxLines(2).LineHeight(1.35)
 		var meta []string

@@ -696,7 +696,7 @@ func (a *app) radioChip(c *ui.Context, name string) {
 	if chip.Hovered() {
 		bg, fg, cross = white.Alpha(0.12), white.Alpha(0.85), 1
 	}
-	chip.Background(chip.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond})).TextColor(fg)
+	chip.Background(chip.AnimateColor("bg", bg, motionHover)).TextColor(fg)
 	chip.Children(func() {
 		ui.Icon(c, icon).Size(12, 12)
 		ui.Text(c, radioLabel(name)).FontSize(11.5).FontWeight(700).LetterSpacing(0.3)
@@ -759,7 +759,7 @@ func (a *app) paneTab(c *ui.Context, i int, label string) ui.Element {
 	} else if b.Hovered() {
 		bg = white.Alpha(0.06)
 	}
-	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+	b.Background(b.AnimateColor("bg", bg, motionHover))
 	b.Children(func() {
 		if i != paneComments {
 			ui.Text(c, label).FontSize(13).FontWeight(600).TextColor(fg)

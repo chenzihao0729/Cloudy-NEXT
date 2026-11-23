@@ -1,8 +1,6 @@
 package app
 
 import (
-	"time"
-
 	"github.com/egoist/mygo/ui"
 )
 
@@ -54,7 +52,7 @@ func fillButton(c *ui.Context, label string, icon *ui.SVG, fill, fg ui.Color, di
 	if b.Hovered() && !disabled {
 		bg = bg.Mix(white, 0.12)
 	}
-	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond})).TextColor(fg)
+	b.Background(b.AnimateColor("bg", bg, motionHover)).TextColor(fg)
 	if disabled {
 		b.Opacity(0.45)
 	}

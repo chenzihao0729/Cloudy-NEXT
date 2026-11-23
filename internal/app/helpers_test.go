@@ -36,9 +36,23 @@ func newTestApp() *app {
 
 // chooseItem clicks through the rows of the menu open, each after the last
 // has shown what it opens.
+// settle lets what is opening grow out of what opened it, as a menu, to
+// where its rows take the pointer.
+func settle(tt *ui.Tester) {
+	tt.Frame()
+	tt.Advance(500 * time.Millisecond)
+	tt.Frame()
+}
+
 func chooseItem(tt *ui.Tester, path ...string) error {
-	for _, label := range path {
-		tt.Frame()
+	for i, label := range path {
+		// What the label before opened grows first. The first opens:
+		// it goes at once, as on Now Playing, whose controls rest.
+		if i > 0 {
+			settle(tt)
+		} else {
+			tt.Frame()
+		}
 		if err := tt.Click(label); err != nil {
 			return err
 		}

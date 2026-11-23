@@ -112,9 +112,6 @@ func (a *app) noteVersion(current string) {
 // and once, that the cover backgrounds are on and where they are turned off.
 func (a *app) whatsNewDialog(c *ui.Context) {
 	w := &a.whatsNew
-	if !w.open {
-		return
-	}
 	p, ink := a.pal, a.inkOn(false)
 	a.dialog(c, "whats-new", 0.35, &w.open, func(panel ui.Element) {
 		a.pane(panel, 26, false)

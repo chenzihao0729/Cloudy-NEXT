@@ -128,9 +128,6 @@ func (a *app) deleteDownloadItems(items []download.Item) {
 
 func (a *app) downloadDeleteDialog(c *ui.Context) {
 	d := &a.dl.deletion
-	if !d.open {
-		return
-	}
 	a.dialog(c, "download-delete", 0.35, &d.open, func(panel ui.Element) {
 		ink := a.inkOn(false)
 		panel.Width(400).TextColor(ink.text)

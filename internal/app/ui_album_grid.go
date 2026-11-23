@@ -163,7 +163,7 @@ func (a *app) albumGroupCard(c *ui.Context, g albumGroup, tracks []netease.Track
 		} else {
 			art.Shadow(0, 2, 8, -2, p.cardShade)
 		}
-		art.AnimatePose(lift, ui.Snappy)
+		art.AnimatePose(a.pressedLift(card, lift), motionPress)
 		art.Children(func() {
 			if g.cover != "" {
 				a.coverFill(c, g.cover, 400, 14)

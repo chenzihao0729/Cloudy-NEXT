@@ -15,9 +15,9 @@ const (
 	stickerInputLimit = 16 << 20
 	webpCanvasLimit   = 4096
 	webpFrameLimit    = 512
-	// An animation keeps all its frames: one over a quarter of the cover
-	// cache shows its first frame only.
-	webpAnimationBytes = artLimit / 4
+	// An animation keeps all its frames: one over 16 MB, a quarter of what
+	// the cover cache once kept, shows its first frame only.
+	webpAnimationBytes = 16 << 20
 )
 
 var (

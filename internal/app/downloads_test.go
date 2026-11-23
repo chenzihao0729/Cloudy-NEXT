@@ -316,6 +316,7 @@ func TestDownloadsBatchDelete(t *testing.T) {
 	if !a.dl.deletion.open {
 		t.Fatal("no delete confirmation")
 	}
+	settle(tt)
 	if err := tt.Click("删除"); err != nil {
 		t.Fatal(err)
 	}

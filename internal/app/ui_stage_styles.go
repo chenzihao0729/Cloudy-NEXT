@@ -39,7 +39,7 @@ func (a *app) stageStyleButton(c *ui.Context) {
 	if b.Hovered() {
 		bg, fg = white.Alpha(0.06), white.Alpha(0.8)
 	}
-	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+	b.Background(b.AnimateColor("bg", bg, motionHover))
 	b.Children(func() {
 		ui.Text(c, label).FontSize(13).FontWeight(600).TextColor(fg)
 		ui.Icon(c, iconDown).Size(12, 12).TextColor(fg)

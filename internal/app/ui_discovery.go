@@ -69,7 +69,7 @@ func (a *app) playlistFilterMenu(c *ui.Context) {
 				} else if button.Hovered() {
 					bg, fg = p.hover, p.text
 				}
-				button.Background(button.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+				button.Background(button.AnimateColor("bg", bg, motionHover))
 				button.Children(func() {
 					ui.Text(c, filter.label).FontSize(13.5).FontWeight(600).TextColor(fg).SingleLine()
 				})

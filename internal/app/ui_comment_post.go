@@ -79,7 +79,7 @@ func (a *app) commentComposer(c *ui.Context, tr *netease.Track) {
 			bg = a.pal.accent
 		}
 		send := ui.ButtonBase(c.Key("compose-send")).Height(32).PaddingX(16).Radius(999).AlignItems(ui.Center).FocusRing(false).Label("发送")
-		send.Background(send.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+		send.Background(send.AnimateColor("bg", bg, motionHover))
 		send.Children(func() {
 			label := "发送"
 			if d.sending {

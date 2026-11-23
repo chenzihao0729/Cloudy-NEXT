@@ -75,6 +75,12 @@ func settingSwitch(c *ui.Context, on *bool) ui.Element {
 	t := c.Theme()
 	sw := ui.SwitchBase(c, on).Size(44, 26).Radius(13).Shrink(0).FocusRing(false)
 	pos := sw.AnimateTo("knob", b2f(*on), ui.Snappy)
+	// Held, the knob stretches toward the side it would go to, as iOS's.
+	held := float32(0)
+	if sw.Pressed() {
+		held = 1
+	}
+	stretch := switchStretch * max(0, sw.AnimateTo("held", held, motionPress))
 	off := ui.RGBA(120, 120, 128, 0.3)
 	if t.Dark {
 		off = ui.RGBA(120, 120, 128, 0.42)
@@ -83,11 +89,22 @@ func settingSwitch(c *ui.Context, on *bool) ui.Element {
 	sw.Draw(func(p *ui.Painter, r ui.Rect) {
 		const in = 2
 		d := r.H - 2*in
-		knob := ui.Rect{X: r.X + in + pos*(r.W-r.H), Y: r.Y + in, W: d, H: d}
+		knob := switchKnob(r, in, pos, stretch)
 		p.Shadow(knob, d/2, 0, 1.5, 4, 0, ui.RGBA(0, 0, 0, 0.28))
 		p.Fill(knob, white, d/2)
 	})
 	return sw
+}
+
+// switchStretch is how much wider a switch's knob is while it is held.
+const switchStretch = 6
+
+// switchKnob is the knob of a switch in r, inset by in, pos of the way
+// across, stretched wider by stretch: from the left while it is off, toward
+// the right, and from the right while it is on, its far side where it was.
+func switchKnob(r ui.Rect, in, pos, stretch float32) ui.Rect {
+	d := r.H - 2*in
+	return ui.Rect{X: r.X + in + pos*(r.W-r.H-stretch), Y: r.Y + in, W: d + stretch, H: d}
 }
 
 // thumbHeight is how tall the cards' pictures are.
@@ -424,11 +441,9 @@ func (a *app) materialGroup(c *ui.Context, k *settingsKit) {
 			a.changed()
 		})
 		open := sv.materialOpen
-		k.row(c, "自定义", "分别设置侧栏、主界面、播放栏和弹窗", func() {
-			if k.disclosure(c, "material-custom", "自定义材质", open).Clicked() {
-				sv.materialOpen = !open
-				a.redraw()
-			}
+		k.opens(c, "material-custom", "自定义材质", "自定义", "分别设置侧栏、主界面、播放栏和弹窗", open, func() {
+			sv.materialOpen = !open
+			a.redraw()
 		})
 		// What it opens: in a drawer, but as rows where a search looks.
 		parts := func() {
@@ -556,20 +571,51 @@ func (a *app) settingsHomePage(c *ui.Context, k *settingsKit) {
 	k.foot(c, "关闭「列出全部歌单」时每组只列前 8 个，其余在「我的主页」里。拖动侧边栏右边缘可以调整宽度。")
 }
 
-// disclosure is the arrow at the end of a row that opens what is under
-// it: pointing at it while closed, and down once open.
-func (k *settingsKit) disclosure(c *ui.Context, key, label string, open bool) ui.Element {
-	b := ui.ButtonBase(c.Key(key)).Size(30, 30).Radius(999).Center().Shrink(0).FocusRing(false).Role(ui.RoleDisclosure).Label(label)
-	b.Expanded(open)
-	bg := ui.Color{}
-	if b.Hovered() {
-		bg = k.ink.hover
-	}
-	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	b.Children(func() {
-		ui.Icon(c, iconDown).Size(15, 15).TextColor(k.ink.muted).Rotate(b.AnimateTo("turn", -90*(1-b2f(open)), motionFast))
+// opens is a row, label over desc, that opens what is under it, as the
+// calendar's contents: all of it a button called name, its chevron at the
+// end turning down as it opens. toggle opens or closes it.
+func (k *settingsKit) opens(c *ui.Context, key, name, label, desc string, open bool, toggle func()) {
+	o := &rowOpens{key: key, name: name, open: open, toggle: toggle}
+	k.rowOf(c, settingRow{label: label, desc: desc, opens: o}, func() {
+		bg := ui.Color{}
+		if o.hovered {
+			bg = k.ink.hover
+		}
+		chevron := ui.Box(c.Key(key+"-chevron")).Size(30, 30).Radius(999).Center().Shrink(0)
+		chevron.Background(chevron.AnimateColor("bg", bg, motionHover))
+		chevron.Children(func() {
+			ui.Icon(c, iconDown).Size(15, 15).TextColor(k.ink.muted).Rotate(chevron.AnimateTo("turn", -90*(1-b2f(open)), motionFast))
+		})
 	})
-	return b
+}
+
+// rowOpening is a settings row, a button if it opens what is under it,
+// lit as the pointer is over it, and more as it is pressed.
+func (k *settingsKit) rowOpening(c *ui.Context, o *rowOpens) ui.Element {
+	if o == nil {
+		return ui.Row(c)
+	}
+	row := ui.Row(c.Key(o.key)).Role(ui.RoleDisclosure).Label(o.name).Expanded(o.open).FocusRing(false)
+	o.hovered = row.Hovered()
+	if row.Clicked() {
+		o.toggle()
+	}
+	lit := ui.Color{}
+	switch {
+	case row.Pressed():
+		lit = k.ink.press
+	case row.Hovered():
+		lit = k.ink.hover
+	}
+	o.lit = row.AnimateColor("lit", lit, motionHover)
+	return row
+}
+
+// rowLit paints the light of the row of o, inset from the card's edges.
+func rowLit(p *ui.Painter, b ui.Rect, o *rowOpens) {
+	if o != nil && o.lit.A > 0 {
+		p.Fill(ui.Rect{X: b.X + 6, Y: b.Y + 3, W: b.W - 12, H: b.H - 6}, o.lit, 14)
+	}
 }
 
 // npPreview is Now Playing in small, at the head of its settings: its

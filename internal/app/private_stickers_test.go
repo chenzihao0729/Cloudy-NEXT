@@ -148,7 +148,7 @@ func TestPrivateStickerPickerClosesWithMotion(t *testing.T) {
 	openPicker := func() ui.Rect {
 		t.Helper()
 		clickAnchor()
-		tt.Advance(motionPane.Duration)
+		tt.Advance(time.Second)
 		tt.Frame()
 		r, ok := tt.Find("选择网易云表情")
 		if !ok {
@@ -166,7 +166,7 @@ func TestPrivateStickerPickerClosesWithMotion(t *testing.T) {
 		if tt.Image().RGBAAt(x, y) == bg {
 			t.Fatal("the picker disappeared on the close frame")
 		}
-		tt.Advance(motionPane.Duration)
+		tt.Advance(time.Second)
 		tt.Frame()
 		if tt.Image().RGBAAt(x, y) != bg {
 			t.Fatal("the picker remained visible after its exit settled")

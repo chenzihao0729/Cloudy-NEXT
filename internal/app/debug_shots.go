@@ -10,6 +10,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/netease"
 )
 
 // With NM_SHOTS set to a directory, the app walks through its views and
@@ -337,6 +339,82 @@ func init() {
 				for {
 					time.Sleep(5 * time.Second)
 					memMark("after")
+				}
+			}
+			if os.Getenv("NM_SCENE") == "browse" {
+				// Browsing only, Now Playing never opened, as the music
+				// plays: the listener's playlists, the charts, the artists
+				// of what plays and a few searches, each scrolled to its
+				// foot, then left on the home page for four minutes, the Go
+				// heap and the releases marked on stderr. Above other
+				// windows, focused, so that nothing but browsing stops.
+				mygo.RunOnMain(func() {
+					a.win.SetAlwaysOnTop(true)
+					a.win.Show()
+				})
+				memMark := func(s string) {
+					var m runtime.MemStats
+					runtime.ReadMemStats(&m)
+					var pages, released int
+					mygo.RunOnMain(func() {
+						pages = len(a.playlists) + len(a.artists) + len(a.albums) + len(a.searches)
+						released = a.mem.count
+					})
+					println("mem", time.Now().Format("15:04:05"), s, "inuse", m.HeapInuse>>20, "idle", m.HeapIdle>>20, "released", m.HeapReleased>>20, "sys", m.Sys>>20, "gc", m.NumGC, "pages", pages, "freed", released)
+				}
+				for range 80 {
+					var ready bool
+					mygo.RunOnMain(func() { ready = a.pl.Current() != nil && a.profile != nil && len(a.mine) > 0 })
+					if ready {
+						break
+					}
+					time.Sleep(250 * time.Millisecond)
+				}
+				time.Sleep(3 * time.Second)
+				step(0, func() { a.volume = 0.02; a.pl.SetVolume(0.02) })
+				memMark("start")
+				visit := func(r route) {
+					step(0, func() { a.open(r) })
+					time.Sleep(2500 * time.Millisecond)
+					step(0, func() { a.pageScroll.ScrollTo(0, 100000, ui.Smooth) })
+					time.Sleep(1500 * time.Millisecond)
+				}
+				var routes []route
+				mygo.RunOnMain(func() {
+					for _, pl := range a.mine {
+						routes = append(routes, route{page: pagePlaylist, id: pl.ID})
+					}
+					for _, pl := range a.charts {
+						routes = append(routes, route{page: pagePlaylist, id: pl.ID})
+					}
+					for _, t := range a.daily {
+						if len(t.Artists) > 0 {
+							routes = append(routes, route{page: pageArtist, id: t.Artists[0].ID})
+						}
+						if t.Album.ID != 0 {
+							routes = append(routes, route{page: pageAlbum, id: t.Album.ID})
+						}
+					}
+				})
+				routes = routes[:min(len(routes), 70)]
+				for i, r := range routes {
+					visit(r)
+					if i%10 == 9 {
+						memMark(fmt.Sprint("pages", i+1))
+					}
+				}
+				for i, q := range []string{"周杰伦", "陈奕迅", "林俊杰", "邓紫棋", "五月天", "钢琴", "lofi", "爵士"} {
+					step(0, func() { a.searchFor(route{page: pageSearch, query: q, kind: netease.SearchSongs}) })
+					time.Sleep(3 * time.Second)
+					step(0, func() { a.pageScroll.ScrollTo(0, 100000, ui.Smooth) })
+					time.Sleep(1500 * time.Millisecond)
+					memMark(fmt.Sprint("search", i))
+				}
+				step(0, func() { a.open(route{page: pageHome}) })
+				memMark("home")
+				for {
+					time.Sleep(5 * time.Second)
+					memMark("idle")
 				}
 			}
 			if os.Getenv("NM_SCENE") == "np" {

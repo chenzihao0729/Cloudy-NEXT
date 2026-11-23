@@ -20,6 +20,7 @@ func TestStageStyleMenu(t *testing.T) {
 		if err := tt.Click("律动效果"); err != nil {
 			t.Fatal(err)
 		}
+		settle(tt)
 		if err := chooseItem(tt, c.item); err != nil {
 			t.Fatalf("%v; the menu shows %q", err, tt.Texts())
 		}
@@ -43,6 +44,7 @@ func TestStageSparksMenu(t *testing.T) {
 		if err := tt.Click("律动效果"); err != nil {
 			t.Fatal(err)
 		}
+		settle(tt)
 		if err := chooseItem(tt, "火花"); err != nil {
 			t.Fatalf("%v; the menu shows %q", err, tt.Texts())
 		}

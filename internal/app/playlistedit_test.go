@@ -233,6 +233,7 @@ func TestDeletePlaylist(t *testing.T) {
 	if err := tt.Click("更多"); err != nil {
 		t.Fatal(err)
 	}
+	settle(tt)
 	if err := chooseItem(tt, "删除歌单…"); err != nil {
 		t.Fatalf("%v; the menu shows %q", err, tt.Texts())
 	}

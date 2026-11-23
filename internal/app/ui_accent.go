@@ -92,9 +92,6 @@ type accentPick struct {
 // whose color the app takes at once, and keeps when the well closes.
 func (a *app) accentDialog(c *ui.Context) {
 	d := &a.settingsView.accentDraft
-	if !d.open && !d.dirty {
-		return
-	}
 	p := a.pal
 	a.dialog(c, "accent", 0.35, &d.open, func(panel ui.Element) {
 		a.pane(panel, 20, false)

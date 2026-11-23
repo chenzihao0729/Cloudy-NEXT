@@ -144,7 +144,8 @@ func (a *app) coverCardOf(c *ui.Context, name, cover string, playCount float64, 
 	// From the top: a grid stretches the cards of a row as tall as the
 	// tallest, whose name or line under it takes two lines.
 	card := ui.ButtonBase(c).Column().Gap(10).AlignItems(ui.Stretch).Justify(ui.Start).FocusRing(false).Label(name)
-	hovered := card.Hovered()
+	a.cardIn(card, 0)
+	hovered := card.Hovered() || a.menuHeld(card)
 	var artAt ui.Rect
 	card.Children(func() {
 		art := ui.Box(c).AspectRatio(1).Radius(14)
@@ -157,7 +158,7 @@ func (a *app) coverCardOf(c *ui.Context, name, cover string, playCount float64, 
 		} else {
 			art.Shadow(0, 2, 8, -2, p.cardShade)
 		}
-		art.AnimatePose(lift, ui.Snappy)
+		art.AnimatePose(a.pressedLift(card, lift), motionPress)
 		art.Children(func() {
 			a.coverFill(c, cover, 400, 14)
 			if playCount > 0 {
@@ -235,7 +236,8 @@ func (a *app) chartCard(c *ui.Context, pl *netease.Playlist) {
 	if hovered {
 		bg = p.press
 	}
-	card.Background(card.AnimateColor("bg", bg, ui.Animation{Duration: 140 * time.Millisecond}))
+	card.Background(card.AnimateColor("bg", bg, motionHover))
+	a.cardIn(card, 0.98)
 	var artAt ui.Rect
 	card.Children(func() {
 		art := ui.Box(c).Size(84, 84).Radius(8).Shadow(0, 3, 10, -2, p.cardShade)
@@ -284,7 +286,9 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 	head := ui.Row(c).Gap(28).AlignItems(ui.End).Padding(0, 0, 26, 0)
 	head.Children(func() {
 		a.headCover(c, pl.Cover())
-		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
+		info := ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8)
+		a.loadedIn(info, 0)
+		info.Children(func() {
 			kind := "歌单"
 			if pl.UpdateFreq != "" {
 				kind = "榜单 · " + pl.UpdateFreq
@@ -307,7 +311,9 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 				}
 				ui.Text(c, hint).FontSize(12.5).TextColor(p.muted).Margin(10, 0, 0, 0)
 			} else {
-				ui.Row(c).Gap(10).Margin(10, 0, 0, 0).Children(func() {
+				buttons := ui.Row(c).Gap(10).Margin(10, 0, 0, 0)
+				a.loadedIn(buttons, 2)
+				buttons.Children(func() {
 					if pillButton(c.Key("play"), iconPlay, "播放", p.accent, p.onAccent).Clicked() {
 						a.playList(pl.Tracks, false)
 					}
@@ -473,19 +479,21 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 			a.songContext(row, tr, pid)
 		}
 		hovered := row.Hovered()
+		// Its menu open, the row keeps its hover, as on macOS.
+		held := hovered || a.menuHeld(row)
 		bg := ui.Transparent
 		switch {
 		case selected:
 			bg = p.accent.Alpha(0.14)
 		case playing:
 			bg = p.accent.Alpha(0.09)
-		case hovered:
+		case held:
 			bg = p.hover
 			if tint, ok := a.rowTint(tr.Album.PicURL); ok {
 				bg = tint.Alpha(0.16)
 			}
 		}
-		row.Background(row.AnimateColor("bg", bg, ui.Animation{Duration: 140 * time.Millisecond}))
+		row.Background(row.AnimateColor("bg", bg, motionHover))
 		if playing && !batch {
 			a.rowGlow(row)
 		}
@@ -500,20 +508,18 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 		if shown < 1 {
 			row.Opacity(shown)
 		}
+		a.pressPose(row, 0.99)
 		row.Children(func() {
 			ui.Box(c).Width(26).Center().Children(func() {
 				if batch {
 					a.batchCheck(c, selected)
 					return
 				}
-				switch {
-				case playing:
+				if playing {
 					a.nowPlayingBars(c)
-				case hovered && canPlay:
-					ui.Icon(c, iconPlay).Size(13, 13).TextColor(p.text)
-				default:
-					ui.Textf(c, "%d", i+1).FontSize(13).FontFeatures("tnum").TextColor(p.faint)
+					return
 				}
+				a.indexOrPlay(c, row, i+1, hovered && canPlay, p.text, p.faint)
 			})
 			if covers {
 				if tr.Album.PicURL == "" && a.route.page == pageSearch {

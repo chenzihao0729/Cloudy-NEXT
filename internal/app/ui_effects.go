@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -117,9 +116,6 @@ func (a *app) presetLabel() string {
 // controls to shape the sound by hand, in the settings' cards and rows.
 func (a *app) effectsDialog(c *ui.Context) {
 	v := &a.effects
-	if !v.open {
-		return
-	}
 	ink, pal := a.inkOn(false), a.pal
 	e := &a.settings.Effects
 	w, h := c.Size()
@@ -296,8 +292,8 @@ func (a *app) presetTile(c *ui.Context, key, label, desc, color string, icon *ui
 	if chosen {
 		line, width = a.pal.accent, 1.5
 	}
-	tile.Background(tile.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond})).
-		Border(width, tile.AnimateColor("edge", line, ui.Animation{Duration: 140 * time.Millisecond}))
+	tile.Background(tile.AnimateColor("bg", bg, motionHover)).
+		Border(width, tile.AnimateColor("edge", line, motionHover))
 	pose := ui.Pose{}
 	if tile.Pressed() {
 		pose.Scale = 0.98

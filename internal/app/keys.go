@@ -277,6 +277,7 @@ func (a *app) lyricTools(c *ui.Context, id int64, at ui.Rect) {
 			fg = b.AnimateColor("fg", fg, fade)
 			b.Children(func() { label(fg).FontWeight(600).SingleLine() })
 			if b.Clicked() {
+				a.pressedFrom(b, 13)
 				do()
 				a.changed()
 			}
