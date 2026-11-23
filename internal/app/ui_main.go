@@ -126,6 +126,7 @@ func (a *app) view(c *ui.Context) {
 	a.deletePlaylistDialog(c)
 	a.downloadDeleteDialog(c)
 	a.settingsPanel(c)
+	a.privateMessagesPanel(c)
 	a.globalGlassDialog(c)
 	a.signOutDialog(c)
 	a.introDialog(c)
@@ -144,7 +145,7 @@ func (a *app) view(c *ui.Context) {
 	// A retained Handle may stay focused after its input is omitted. Check
 	// this build, after the page and foreground panels have bound their inputs.
 	editing := false
-	for _, field := range []ui.Handle{a.searchBox, a.filterBox, a.dl.box, a.mineView.box, a.settingsView.searchBox} {
+	for _, field := range []ui.Handle{a.searchBox, a.filterBox, a.dl.box, a.mineView.box, a.settingsView.searchBox, a.dm.searchBox, a.dm.composer} {
 		if c.Focused(field) && c.Resolve(field).Valid() {
 			editing = true
 		}
@@ -630,7 +631,7 @@ func (a *app) content(c *ui.Context, foreground float32) {
 	// list, as a page's tabs in its header, opens it as the list builds.
 	if a.scrolled != a.route {
 		a.trackList, a.pageScroll, a.scrolled = ui.ListState{}, ui.ScrollState{}, a.route
-		a.listScroll, a.listLocate = ui.ScrollState{}, -1
+		a.listLocate = -1
 		a.pageScroll.Y, a.restoreY = a.restoreY, 0
 	}
 	a.headAt = ui.Rect{}

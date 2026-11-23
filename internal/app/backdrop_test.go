@@ -220,7 +220,7 @@ func TestBeatsLetDropsFall(t *testing.T) {
 }
 
 // The leaves of the pool go every way, in and out by every edge, and
-// there are always from two to six of them in the picture.
+// there are always from three to six alive, including ones entering at an edge.
 func TestPoolLeavesComeAndGo(t *testing.T) {
 	var ls leafState
 	var drops [sceneDrops]sceneDrop
@@ -237,9 +237,7 @@ func TestPoolLeavesComeAndGo(t *testing.T) {
 			if !l.alive {
 				continue
 			}
-			if l.x > -l.half && l.x < aspect+l.half && l.y > -l.half && l.y < 1+l.half {
-				seen++
-			}
+			seen++
 			switch {
 			case l.x < 0:
 				edges["left"] = true
@@ -251,7 +249,7 @@ func TestPoolLeavesComeAndGo(t *testing.T) {
 				edges["bottom"] = true
 			}
 		}
-		if seen < 2 || seen > poolLeaves {
+		if seen < 3 || seen > poolLeaves {
 			t.Fatalf("%d leaves in the picture at %.1f s", seen, drift)
 		}
 	}

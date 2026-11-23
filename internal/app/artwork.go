@@ -25,6 +25,7 @@ import (
 // derives from it: its color, and a blurred copy to fill a backdrop.
 type artwork struct {
 	bmp      *ui.Bitmap
+	sticker  *stickerAnimation
 	backdrop *ui.Bitmap
 	tint     ui.Color // the cover's most vivid color
 	failed   bool
@@ -91,6 +92,18 @@ func (c *artCache) add(key string, a *artwork) {
 	}
 }
 
+// letGo stops keeping the covers at keys, as the view that asked for them
+// goes: they stay found only while something else still holds them.
+func (c *artCache) letGo(keys map[string]bool) {
+	for key := range keys {
+		if a, ok := c.art[key]; ok {
+			delete(c.art, key)
+			c.size -= a.size
+			c.gone[key] = weak.Make(a)
+		}
+	}
+}
+
 // peek returns the cover at url if it is here, without asking for it.
 func (c *artCache) peek(url string) *artwork {
 	if a, ok := c.art[url]; ok {
@@ -102,11 +115,21 @@ func (c *artCache) peek(url string) *artwork {
 
 // get returns the cover at url, or nil while it loads.
 func (c *artCache) get(url string, backdrop bool) *artwork {
+	return c.getArtwork(url, backdrop, false, false)
+}
+
+func (c *artCache) getSticker(url string, animate bool) *artwork {
+	return c.getArtwork(url, false, true, animate)
+}
+
+func (c *artCache) getArtwork(url string, backdrop, sticker, animate bool) *artwork {
 	if url == "" {
 		return nil
 	}
 	key := url
-	if backdrop {
+	if animate {
+		key += "#sticker"
+	} else if backdrop {
 		key += "#backdrop"
 	}
 	now := c.now()
@@ -132,16 +155,8 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 	c.busy[key] = true
 	go func() {
 		c.sem <- struct{}{}
-		bmp, img, size, err := loadArt(url)
+		a, err := loadArt(url, backdrop, sticker, animate)
 		<-c.sem
-		var blurred *image.RGBA
-		var tint ui.Color
-		if err == nil {
-			tint = dominantColor(img)
-			if backdrop {
-				blurred = blurImage(img)
-			}
-		}
 		c.post(func() {
 			delete(c.busy, key)
 			if err != nil {
@@ -149,15 +164,13 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 				c.add(key, &artwork{failed: true, used: now, retryAt: now.Add(artRetry)})
 				return
 			}
-			a := &artwork{bmp: bmp, tint: tint, used: c.now(), size: size}
-			if blurred != nil {
-				a.backdrop = ui.NewBitmap(blurred)
-				a.size += len(blurred.Pix)
-			}
+			a.used = c.now()
 			c.add(key, a)
 			// Shown by the frame post draws, the cover drops its pixels,
 			// which its data decodes again if they are needed.
-			time.AfterFunc(artRelease, func() { mygo.RunOnMain(bmp.ReleasePixels) })
+			if a.sticker == nil {
+				time.AfterFunc(artRelease, func() { mygo.RunOnMain(a.bmp.ReleasePixels) })
+			}
 		})
 	}()
 	return nil
@@ -171,20 +184,37 @@ const artRelease = 2 * time.Second
 // until restart or making a new request on every frame while offline.
 const artRetry = 30 * time.Second
 
-// loadArt fetches the cover at url, as a bitmap to draw and an image to
-// measure, with the bytes of its data.
-func loadArt(url string) (*ui.Bitmap, image.Image, int, error) {
+func loadArt(url string, backdrop, sticker, animate bool) (*artwork, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
-	b, err := netease.FetchContext(ctx, url)
+	var limit int64
+	if sticker {
+		limit = stickerInputLimit
+	}
+	b, err := netease.FetchLimitedContext(ctx, url, limit)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, err
+	}
+	if animate {
+		return decodeStickerArt(b)
+	}
+	if sticker && isWebPSticker(b) {
+		return decodeWebPStickerFrames(b, 1)
 	}
 	if _, n := netease.LocalSize(url); n > 0 {
 		b = thumbnail(b, n)
 	}
 	bmp, img, err := decodeArt(b)
-	return bmp, img, len(b), err
+	if err != nil {
+		return nil, err
+	}
+	a := &artwork{bmp: bmp, tint: dominantColor(img), size: len(b)}
+	if backdrop {
+		blurred := blurImage(img)
+		a.backdrop = ui.NewBitmap(blurred)
+		a.size += len(blurred.Pix)
+	}
+	return a, nil
 }
 
 // thumbnail makes a local cover, b, no larger than n pixels across, as the
@@ -216,7 +246,7 @@ func thumbnail(b []byte, n int) []byte {
 // decodeArt decodes a cover twice: as a bitmap, which keeps the data to
 // decode its pixels again after it drops them, and as an image.
 func decodeArt(b []byte) (*ui.Bitmap, image.Image, error) {
-	b = stillCover(b)
+	b = stripPNGAlphaTransparency(stillCover(b))
 	img, _, err := image.Decode(bytes.NewReader(b))
 	if err != nil {
 		return nil, nil, err
@@ -238,9 +268,7 @@ func decodeImage(b []byte) (image.Image, error) {
 	return img, err
 }
 
-// stillCover returns the data of a cover that the decoders read. Some
-// covers are animated WebP, whatever their name says, which they cannot:
-// those show their first frame.
+// stillCover prepares an image for the standard decoders, which show one frame.
 func stillCover(b []byte) []byte {
 	if still := firstWebPFrame(b); still != nil {
 		return still

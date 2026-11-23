@@ -30,13 +30,13 @@ func (a *app) listFloats(c *ui.Context, bottom float32, grid bool) {
 			// Rows are of a height, nearly all: as many rows from those in
 			// view as it is, by the height they take.
 			rowH := a.listBox.H / float32(last-first+1)
-			y := a.listScroll.Y + (float32(a.listAim)-float32(first+last)/2)*rowH
-			a.listScroll.ScrollTo(0, max(0, min(y, a.listScroll.MaxY)), listGlide)
+			y := a.pageScroll.Y + (float32(a.listAim)-float32(first+last)/2)*rowH
+			a.pageScroll.ScrollTo(0, max(0, min(y, a.pageScroll.MaxY)), listGlide)
 			a.listLocate, a.listAim = a.listAim, 0
 		}
 		c.AnimationFrame()
 	}
-	if a.listLocate > 0 && !a.listScroll.Scrolling() {
+	if a.listLocate > 0 && !a.pageScroll.Scrolling() {
 		if row := a.listLocate; row < first || row > last {
 			a.trackList.ScrollTo(row, ui.Center)
 		}
@@ -71,17 +71,14 @@ func (a *app) listFloats(c *ui.Context, bottom float32, grid bool) {
 			return b
 		}
 		// Both glide there, rather than jump (the user, 1.3.2-test.1).
-		// The list takes a ScrollState only while it glides (trackRowsGrouped),
-		// which starts from where it shows.
+		// Glides start from the same viewport navigation remembers.
 		if top && float("to-top", "回到顶部", iconDown, 180).Clicked() {
 			a.listLocate, a.listAim = -1, 0
-			a.listScroll = ui.ScrollState{}
-			a.listScroll.ScrollTo(0, 0, listGlide)
+			a.pageScroll.ScrollTo(0, 0, listGlide)
 		}
 		if locate >= 0 && float("to-playing", "定位到正在播放", iconLocate, 0).Clicked() {
 			// Held where it is until the list says where that is (listAim).
-			a.listScroll = ui.ScrollState{}
-			a.listScroll.ScrollTo(0, 0, ui.Animation{Delay: time.Hour, Duration: time.Millisecond})
+			a.pageScroll.ScrollTo(0, a.pageScroll.Y, ui.Animation{Delay: time.Hour, Duration: time.Millisecond})
 			a.listLocate, a.listAim, a.listWait = -1, locate, 2
 		}
 	})

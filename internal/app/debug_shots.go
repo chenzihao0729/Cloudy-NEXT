@@ -145,6 +145,102 @@ func init() {
 				mygo.RunOnMain(mygo.App.Quit)
 				return
 			}
+			if os.Getenv("NM_SCENE") == "dm" {
+				// The private messages opened on the first conversation, its
+				// sticker picker shown, then closed, a few times, then left
+				// closed: the Go heap and the cover cache marked on stderr.
+				dmMark := func(s string) {
+					var m runtime.MemStats
+					runtime.ReadMemStats(&m)
+					var arts, animated, frames, size int
+					mygo.RunOnMain(func() {
+						arts, size = len(a.art.art), a.art.size
+						for _, art := range a.art.art {
+							if art.sticker != nil {
+								animated++
+								frames += len(art.sticker.frames)
+							}
+						}
+					})
+					println("mem", time.Now().Format("15:04:05"), s, "inuse", m.HeapInuse>>20, "idle", m.HeapIdle>>20, "released", m.HeapReleased>>20, "sys", m.Sys>>20,
+						"arts", arts, "artMB", size>>20, "animated", animated, "frames", frames)
+				}
+				for range 120 {
+					var ready bool
+					mygo.RunOnMain(func() { ready = a.profile != nil })
+					if ready {
+						break
+					}
+					time.Sleep(250 * time.Millisecond)
+				}
+				step(0, func() { a.volume = 0.02; a.pl.SetVolume(0.02) })
+				if os.Getenv("NM_WINDOW") == "max" {
+					mygo.RunOnMain(a.win.Maximize)
+				}
+				time.Sleep(4 * time.Second)
+				dmMark("start")
+				if os.Getenv("NM_DM_IDLE") != "" {
+					// The same run with the messages never opened, to compare.
+					time.Sleep(110 * time.Second)
+					runtime.GC()
+					if f, err := os.Create(filepath.Join(dir, "dm-heap-idle.pprof")); err == nil {
+						pprof.WriteHeapProfile(f)
+						f.Close()
+					}
+					for {
+						time.Sleep(5 * time.Second)
+						dmMark("idle")
+					}
+				}
+				for round := range 3 {
+					step(0, func() { a.openPrivateMessages(nil) })
+					for range 40 {
+						var loaded bool
+						mygo.RunOnMain(func() { loaded = a.dm.loaded && len(a.dm.contacts) > 0 })
+						if loaded {
+							break
+						}
+						time.Sleep(250 * time.Millisecond)
+					}
+					var contacts int
+					mygo.RunOnMain(func() { contacts = min(8, len(a.dm.contacts)) })
+					for i := range contacts {
+						step(0, func() { a.selectPrivateChat(a.dm.contacts[i].User) })
+						time.Sleep(3 * time.Second)
+					}
+					dmMark(fmt.Sprint("chats", round))
+					var groups []string
+					mygo.RunOnMain(func() {
+						for _, g := range a.dm.stickers.groups {
+							groups = append(groups, g.ID.String())
+						}
+					})
+					step(0, func() { a.dm.stickers.open = true })
+					for _, g := range groups {
+						step(0, func() {
+							a.dm.stickers.emoji, a.dm.stickers.smallEmoji, a.dm.stickers.classic = false, false, false
+							a.selectPrivateStickerGroup(g)
+						})
+						time.Sleep(2 * time.Second)
+					}
+					step(0, func() { a.dm.stickers.classic = true })
+					time.Sleep(2 * time.Second)
+					dmMark(fmt.Sprint("picker", round))
+					step(0, a.requestPrivateClose)
+					time.Sleep(4 * time.Second)
+					dmMark(fmt.Sprint("closed", round))
+				}
+				time.Sleep(10 * time.Second)
+				runtime.GC()
+				if f, err := os.Create(filepath.Join(dir, "dm-heap.pprof")); err == nil {
+					pprof.WriteHeapProfile(f)
+					f.Close()
+				}
+				for {
+					time.Sleep(5 * time.Second)
+					dmMark("after")
+				}
+			}
 			if os.Getenv("NM_SCENE") == "mem" {
 				// Now Playing opened and closed a few times over what plays,
 				// then left closed while it plays on, the Go heap marked on
