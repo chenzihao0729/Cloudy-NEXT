@@ -19,14 +19,21 @@ func (a *app) chosenAccent() string {
 }
 
 // readSysAccent notes the desktop's accent, as the app opens and as the
-// desktop's theme changes.
+// desktop's theme changes, and whether it asks for opaque surfaces
+// (Windows's transparency effects off), which makes the app's own glass
+// solid (settings.opaque).
 func (a *app) readSysAccent() {
+	prefs := mygo.Theme.Preferences()
 	was := a.sysAccent
 	a.sysAccent = ""
-	if c := mygo.Theme.Preferences().Accent; c.A != 0 {
+	if c := prefs.Accent; c.A != 0 {
 		a.sysAccent = hexOf(ui.RGB(c.R, c.G, c.B))
 	}
 	if a.sysAccent != was && a.settings.Accent == accentSystem {
+		a.redraw()
+	}
+	if prefs.ReduceTransparency != a.sysOpaque {
+		a.sysOpaque = prefs.ReduceTransparency
 		a.redraw()
 	}
 }

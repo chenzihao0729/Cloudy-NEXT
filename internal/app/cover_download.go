@@ -106,7 +106,7 @@ func (a *app) coverContext(el ui.Element, tr *netease.Track) {
 	if tr.Album.PicURL == "" {
 		return
 	}
-	a.contextMenu(el, a.nowPlaying, func() [][]menuAction {
+	a.contextMenu(el, false, func() [][]menuAction {
 		return [][]menuAction{{a.coverAction(tr)}}
 	}, a.songHead(tr))
 }

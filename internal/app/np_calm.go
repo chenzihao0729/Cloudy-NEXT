@@ -75,8 +75,7 @@ func (a *app) npCalmness(c *ui.Context, root ui.Element, pointerIn bool) float32
 	if st.in {
 		wait = npCalmStill
 	}
-	calm := a.settings.NpCalm && !a.npBusy() && a.pl.Current() != nil &&
-		a.npPane != paneStage && a.npPane != paneWall
+	calm := a.settings.NpCalm && !a.npBusy() && a.pl.Current() != nil && a.npPane != paneWall
 	if calm {
 		if left := wait - now.Sub(st.moved); left > 0 {
 			calm = false
@@ -144,7 +143,7 @@ func (a *app) npCalmCover(c *ui.Context) {
 // npBusy reports whether something in Now Playing is in use: a menu, a
 // dialog or a popover open, or the progress held.
 func (a *app) npBusy() bool {
-	return a.menu.open || a.npScrub.held || a.npScrub.active || a.more.queue.open
+	return a.menu.open || a.npScrub.held || a.npScrub.active || a.more.queue.open || a.npComments
 }
 
 // npFade fades e as Now Playing calms, and lets the pointer through it once

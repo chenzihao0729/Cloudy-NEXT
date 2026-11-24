@@ -444,7 +444,7 @@ func (a *app) stylePickerDialog(c *ui.Context) {
 	s := &a.style
 	p := a.pal
 	a.dialog(c, "style-picker", 0.35, &s.open, func(panel ui.Element) {
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		ink := a.inkOn(false)
 		panel.Width(560).TextColor(ink.text)
 		dialogHeader(c, ink, "选择风格", "同一类里可以多选，和网易云官方客户端同步", func() { s.open = false })

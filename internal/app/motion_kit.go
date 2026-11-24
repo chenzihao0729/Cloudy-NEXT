@@ -537,4 +537,6 @@ func (a *app) liquidLens(c *ui.Context, key string, r ui.Rect, lift, growW, grow
 
 // liquidOK reports whether highlights may rise into lenses: with full
 // motion, and glass, as not saving power.
-func (a *app) liquidOK() bool { return a.motion == motionFull && !a.settings.PowerSaver }
+func (a *app) liquidOK() bool {
+	return a.motion == motionFull && !a.settings.PowerSaver && !a.settings.opaque
+}

@@ -114,6 +114,12 @@ func TestSettingsCategoryNavigation(t *testing.T) {
 	if !a.settings.UpdateInstall {
 		t.Fatal("returning to about lost the update preference")
 	}
+	// Scroll the update action into view at compact window sizes.
+	if pane, ok := tt.Find("关于设置项"); ok {
+		tt.Scroll(pane.X+40, pane.Y+pane.H/2, 0, 220)
+		tt.Advance(time.Second)
+		tt.Frame()
+	}
 	if err := tt.Click("检查更新"); err != nil {
 		t.Fatal(err)
 	}

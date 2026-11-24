@@ -104,7 +104,7 @@ func (v *introView) useArtistIntro(got artistIntro) {
 func (a *app) introDialog(c *ui.Context) {
 	v := &a.more.intro
 	a.dialog(c, "intro", 0.35, &v.open, func(panel ui.Element) {
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		ink := a.inkOn(false)
 		_, h := c.Size()
 		panel.Width(560).MaxHeight(max(240, h-120)).TextColor(ink.text)

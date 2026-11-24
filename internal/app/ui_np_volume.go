@@ -96,7 +96,8 @@ func (a *app) volumeBar(c *ui.Context, key string, width float32, color, track, 
 				k := 12 * knob
 				head, cy := r.X+r.W*v, r.Y+r.H/2
 				p.Shadow(ui.Rect{X: head - k/2, Y: cy - k/2, W: k, H: k}, k/2, 0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.3))
-				p.Fill(ui.Rect{X: head - k/2, Y: cy - k/2, W: k, H: k}, color, k/2)
+				// Solid, as the progress's: a knob the bar shows through looks hollow.
+				p.Fill(ui.Rect{X: head - k/2, Y: cy - k/2, W: k, H: k}, solid(color), k/2)
 			}
 		})
 		if pressed {

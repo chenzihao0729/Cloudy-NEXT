@@ -6,7 +6,7 @@ import "github.com/egoist/mygo/ui"
 // bitmap; row entrance, hover and typing cannot invalidate its cached scene.
 func (a *app) privateMessagePane(c *ui.Context, panel ui.Element, content func()) {
 	if a.settings.GlobalGlass || a.settings.panelGlass() {
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Children(content)
 		return
 	}

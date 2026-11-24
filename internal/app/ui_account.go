@@ -193,7 +193,7 @@ func (a *app) askSignOut() {
 // signOutDialog asks whether to sign out.
 func (a *app) signOutDialog(c *ui.Context) {
 	a.dialog(c, "sign-out", 0.35, &a.signingOut, func(panel ui.Element) {
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		ink := a.inkOn(false)
 		panel.Width(400).TextColor(ink.text)
 		name := ""
@@ -218,7 +218,7 @@ func (a *app) loginDialog(c *ui.Context) {
 	p := a.pal
 	l := &a.login
 	a.dialog(c, "login", 0.35, &l.open, func(panel ui.Element) {
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Width(340).Padding(28, 28, 26, 28).Gap(6).AlignItems(ui.Center)
 		if l.cookie && !l.finished {
 			a.cookieLogin(c, panel)

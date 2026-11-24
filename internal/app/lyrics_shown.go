@@ -1,6 +1,8 @@
 package app
 
 import (
+	"strings"
+
 	"netease-music-mygo/internal/lyrics"
 )
 
@@ -14,9 +16,14 @@ type shownCache struct {
 
 // shownLyrics are the lyrics of the song playing as Now Playing and the
 // desktop lyrics show them: without the lines naming who made it, as 作词
-// and 作曲, if the listener hid them.
+// and 作曲, if the listener hid them; and none for a piece with none but
+// NetEase's line saying it has none (纯音乐，请欣赏), which then shows in
+// the middle as for any with none, not at the top as a line sung.
 func (a *app) shownLyrics() ([]lyrics.Line, bool) {
 	lines, loaded := a.pl.Lyrics()
+	if pureMusic(lines) {
+		return nil, loaded
+	}
 	if !a.settings.HideCredits || len(lines) == 0 {
 		return lines, loaded
 	}
@@ -26,6 +33,26 @@ func (a *app) shownLyrics() ([]lyrics.Line, bool) {
 		sc.lines = withoutCredits(lines)
 	}
 	return sc.lines, loaded
+}
+
+// pureMusic reports whether lines say only that the song has no words:
+// besides who made it, nothing but a line of 纯音乐.
+func pureMusic(lines []lyrics.Line) bool {
+	if len(lines) == 0 || len(lines) > 8 {
+		return false
+	}
+	said := false
+	for _, l := range lines {
+		text := strings.TrimSpace(l.Text)
+		switch {
+		case strings.Contains(text, "纯音乐"):
+			said = true
+		case text == "" || lyrics.IsCredit(text):
+		default:
+			return false
+		}
+	}
+	return said
 }
 
 // withoutCredits returns lines without the credits among them. Lyrics that

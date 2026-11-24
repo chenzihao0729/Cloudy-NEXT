@@ -51,11 +51,20 @@ func TestNowPlayingExternalCommentsSwitch(t *testing.T) {
 		}
 	}
 	a.pl.Cue([]netease.Track{wy})
-	found := false
-	for _, tab := range a.npTabs() {
-		found = found || tab.pane == paneComments
+	// v1.3.7 replaces the tab with a drawer opened by the comment button.
+	a.comments = commentState{track: wy.ID, loaded: true}
+	button := ui.NewTester(func(c *ui.Context) { a.commentCountButton(c, a.pl.Current(), 20, white) }, 200, 80)
+	button.Frame()
+	if err := button.Click("评论"); err != nil {
+		t.Fatal(err)
 	}
-	if !found {
-		t.Fatal("NetEase comments tab did not return")
+	button.Frame()
+	if !a.npComments {
+		t.Fatal("NetEase comment button did not open drawer")
+	}
+	a.pl.Cue([]netease.Track{external})
+	tt.Frame()
+	if a.npComments {
+		t.Fatal("external track retained comment drawer")
 	}
 }

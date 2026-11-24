@@ -45,8 +45,11 @@ func (a *app) choiceCards(c *ui.Context, key, what string, labels []string, chos
 					card.AnimatePose(pose, ui.Snappy)
 					card.Draw(func(p *ui.Painter, r ui.Rect) {
 						if ring > 0.01 {
-							// About the picture, a little way off it.
-							p.Stroke(ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: thumbHeight + 6}, accent.Alpha(ring), 14, 2)
+							// About the picture, a little way off it, as far all
+							// round: the card's padding of 4 is the gap and the
+							// ring, inside its edge, and its corners are the
+							// picture's, 8, as far out.
+							p.Stroke(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: thumbHeight + 8}, accent.Alpha(ring), 8+4, 2)
 						}
 					})
 					card.Children(func() {
@@ -217,7 +220,7 @@ func (a *app) settingsNowPlayingPage(c *ui.Context, k *settingsKit) {
 		a.nowPlayingPreview(c)
 	}
 	k.group(c, "背景", func() {
-		k.block(c, "背景 动态背景 静态 烟雾 光斑 极光 星空 深海 波纹 月夜 封面色", func() { a.backdropCards(c) })
+		k.block(c, "背景 动态背景 静态 烟雾 光斑 极光 星空 深海 波纹 月夜 丝绸 封面色", func() { a.backdropCards(c) })
 		// Of the scene chosen alone: each keeps its own answer.
 		scene := backdropSceneOf(s.FogStyle)
 		_, own := sceneTints[scene.id]
@@ -447,7 +450,7 @@ func (a *app) materialGroup(c *ui.Context, k *settingsKit) {
 		})
 		// What it opens: in a drawer, but as rows where a search looks.
 		parts := func() {
-			k.sub(c, "全局液态玻璃", "通透的封面色背景，播放栏、菜单和对话框用折射玻璃", true, func() {
+			k.sub(c, "全局液态玻璃", "通透的封面色背景，播放栏、菜单和对话框都用玻璃", true, func() {
 				on := s.GlobalGlass
 				if settingSwitch(c.Key("global-glass"), &on).Label("切换全局液态玻璃").Changed() {
 					if on {
@@ -482,15 +485,47 @@ func (a *app) materialGroup(c *ui.Context, k *settingsKit) {
 			k.sub(c, "主界面封面色背景", "", true, func() {
 				part("main-glass", "主界面封面色背景", &s.MainGlass, coverOn(&s.MainGlass))
 			})
-			k.sub(c, "液态玻璃播放栏", "悬浮的玻璃胶囊，折射其下的内容", true, func() {
-				part("liquid-glass", "液态玻璃播放栏", &s.LiquidGlass, a.leavePowerSaver)
+			k.sub(c, "玻璃播放栏", "悬浮在页面上的玻璃胶囊", true, func() {
+				part("liquid-glass", "玻璃播放栏", &s.LiquidGlass, a.leavePowerSaver)
 			})
 			k.sub(c, "界面玻璃", "菜单、弹窗和设置面板使用玻璃材质", true, func() {
 				part("glass-panels", "界面玻璃", &s.GlassPanels, a.leavePowerSaver)
 			})
-			refractive := s.playerGlass() || s.GlobalGlass
-			k.sub(c, "玻璃透明度", "", refractive, func() {
-				a.settingSlider(c.Key("玻璃透明度"), "玻璃透明度", &s.GlassClear, true, k.ink)
+			// Each place glazed in liquid glass, which bends at its rim and
+			// thickens over what is busy, or in frosted.
+			glassKind := func(key string, scene glassScene, frost func(bool)) {
+				i := 0
+				if s.frosted(scene) {
+					i = 1
+				}
+				if a.segmented(c.Key(key), &i, "液态玻璃", "毛玻璃") {
+					frost(i == 1)
+					a.changed()
+				}
+			}
+			k.sub(c, "播放栏玻璃", "液态玻璃边缘折射、随背景调整浓淡；毛玻璃更朦胧", s.playerGlass(), func() {
+				glassKind("bar-glass-kind", sceneBar, func(f bool) { s.BarFrost = f })
+			})
+			k.sub(c, "菜单与浮层玻璃", "菜单、下拉列表、提示和托盘菜单", s.panelGlass(), func() {
+				glassKind("menu-glass-kind", sceneMenu, func(f bool) { s.MenuLiquid = !f })
+			})
+			k.sub(c, "对话框与设置玻璃", "对话框、设置和私信面板", s.panelGlass(), func() {
+				glassKind("dialog-glass-kind", sceneDialog, func(f bool) { s.DialogLiquid = !f })
+			})
+			k.sub(c, "分析页卡片玻璃", "播放页「分析」里的两张卡片", s.panelGlass(), func() {
+				glassKind("analysis-glass-kind", sceneAnalysis, func(f bool) { s.AnalysisFrost = f })
+			})
+			refractive := s.playerGlass() && !s.BarFrost || s.panelGlass() && (!s.frosted(sceneMenu) || !s.frosted(sceneDialog) || !s.AnalysisFrost)
+			k.sub(c, "玻璃透明度", "浅色和深色模式各自记住", refractive, func() {
+				clear := &s.GlassClear
+				if a.pal.dark {
+					if s.GlassClearDark == nil {
+						v := s.GlassClear
+						s.GlassClearDark = &v
+					}
+					clear = s.GlassClearDark
+				}
+				a.settingSlider(c.Key("玻璃透明度"), "玻璃透明度", clear, true, k.ink)
 			})
 			k.sub(c, "折射强度", "", refractive, func() {
 				a.settingSlider(c.Key("折射强度"), "折射强度", &s.GlassBend, true, k.ink)
@@ -697,7 +732,7 @@ func (a *app) nowPlayingPreview(c *ui.Context) {
 				if scene.over != nil {
 					leaves = demoLeaves(drift)
 				}
-				drawSceneDrops(cp, b, style, tint, drift, 0.3, drops, leaves)
+				drawSceneDrops(cp, b, style, tint, drift, 0.3, drops, leaves, nil)
 				drawSceneOver(cp, b, style, tint, drift, 0.3, 1, drops, leaves)
 			})
 		}

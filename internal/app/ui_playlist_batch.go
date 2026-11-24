@@ -460,7 +460,7 @@ func (a *app) floatBar(c *ui.Context) ui.Element {
 	// and its last control line up with the bar's under it.
 	p := a.pal
 	return bar.Padding(0, 20, 0, glassBarInset+6).Radius(h/2).Shadow(0, 6, 24, -6, ui.RGBA(0, 0, 0, 0.3)).
-		Material(a.floatGlass(p.dark))
+		Material(a.barMaterial(p.dark))
 }
 
 // downloadBatchBar is the row over the player bar while downloaded songs

@@ -21,7 +21,6 @@ func (a *app) fontRows(c *ui.Context, k *settingsKit) {
 // lyrics the first choice follows the app's font.
 func (a *app) fontSelect(c *ui.Context, key, label string, id *string, lyric bool) {
 	fonts := a.fontChoices()
-	a.loadFontFiles()
 	// The font chosen in the picker shows among those on offer.
 	if cur := fontOf(*id); cur.custom() {
 		fonts = append(fonts[:len(fonts):len(fonts)], cur)
@@ -43,7 +42,10 @@ func (a *app) fontSelect(c *ui.Context, key, label string, id *string, lyric boo
 			return a.fontFamily()
 		}
 		for _, f := range fonts {
-			if f.label == label && f.id != "" {
+			// A font that comes as a file shows in itself only once it is
+			// loaded: loading them all for the list would keep tens of MB
+			// for a font the listener never picks (loadFontOf).
+			if f.label == label && f.id != "" && a.fontsLoaded[f.id] {
 				return f.family
 			}
 		}

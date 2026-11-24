@@ -54,7 +54,7 @@ func (a *app) stageStyleButton(c *ui.Context) {
 			a.settings.save()
 		}})
 	}
-	a.menuBelow(b, true, [][]menuAction{styles, {{label: "火花", checked: a.settings.StageSparks, do: func() {
+	a.menuBelow(b, false, [][]menuAction{styles, {{label: "火花", checked: a.settings.StageSparks, do: func() {
 		a.settings.StageSparks = !a.settings.StageSparks
 		a.settings.save()
 	}}, {label: "更多歌词设置…", icon: iconSettings, do: func() { a.openSettingsAt(settingsLyrics) }}}}, nil)

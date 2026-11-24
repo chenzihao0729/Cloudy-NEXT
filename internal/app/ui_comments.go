@@ -171,14 +171,17 @@ type commentKey struct {
 
 // commentsPane lists the comments of tr: the hot ones, then the latest,
 // which load on as they scroll into view.
+// It is on the drawer, a pane that takes the theme (the user, 1.3.7-test.6),
+// in the drawer's ink.
 func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
+	ink := a.cmInk()
 	cs := a.commentsFor(tr)
 	a.commentComposer(c, tr)
 	if len(cs.hot) == 0 && len(cs.latest) == 0 {
 		if cs.loading || !cs.loaded && cs.err == "" {
 			a.mk.comments = time.Now() // what comes in place of the skeleton fades in
 			ui.Column(c).Grow(1).Padding(4, 8, 0, 0).Gap(2).Children(func() {
-				s := npShimmer(c)
+				s := a.cmShimmer(c)
 				s.text(c, 13, 1.3).Width(56).Margin(18, 12, 6, 12)
 				commentSkeleton(c, s, 6)
 			})
@@ -187,13 +190,13 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 		ui.Column(c).Grow(1).Center().Gap(14).Children(func() {
 			switch {
 			case cs.err != "":
-				ui.Text(c, cs.err).FontSize(15).TextColor(white.Alpha(0.5))
-				if pillButton(c.Key("retry"), iconComment, "重试", white.Alpha(0.14), white).Clicked() {
+				ui.Text(c, cs.err).FontSize(15).TextColor(ink.Alpha(0.5))
+				if pillButton(c.Key("retry"), iconComment, "重试", ink.Alpha(0.14), ink).Clicked() {
 					a.loadComments()
 				}
 			default:
-				ui.Icon(c, iconComment).Size(40, 40).TextColor(white.Alpha(0.3))
-				ui.Text(c, "还没有评论，快来抢沙发").FontSize(17).FontWeight(600).TextColor(white.Alpha(0.45))
+				ui.Icon(c, iconComment).Size(40, 40).TextColor(ink.Alpha(0.3))
+				ui.Text(c, "还没有评论，快来抢沙发").FontSize(17).FontWeight(600).TextColor(ink.Alpha(0.45))
 			}
 		})
 		return
@@ -204,32 +207,32 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 	scroll.Children(func() {
 		ui.Column(c).Gap(2).Children(func() {
 			if len(cs.hot) > 0 {
-				commentHeading(c, "精彩评论")
+				commentHeadingIn(c, "精彩评论", ink)
 				for i := range cs.hot {
 					a.commentRow(c.Key(commentKey{true, cs.hot[i].ID}), &cs.hot[i], now)
 				}
 			}
-			commentHeading(c, "最新评论 "+count(cs.total))
+			commentHeadingIn(c, "最新评论 "+count(cs.total), ink)
 			for i := range cs.latest {
 				a.commentRow(c.Key(commentKey{false, cs.latest[i].ID}), &cs.latest[i], now)
 			}
 			if cs.loading {
 				a.mk.comments = time.Now()
-				commentSkeleton(c.Key("more"), npShimmer(c), 2)
+				commentSkeleton(c.Key("more"), a.cmShimmer(c), 2)
 			}
 			ui.Row(c.Key("foot")).Height(56).Center().Children(func() {
 				switch {
 				case cs.loading:
 				case cs.err != "":
-					retry := ui.ButtonBase(c.Key("retry")).Padding(6, 14).Radius(999).Background(white.Alpha(0.1)).Label("重试")
+					retry := ui.ButtonBase(c.Key("retry")).Padding(6, 14).Radius(999).Background(ink.Alpha(0.1)).Label("重试")
 					retry.Children(func() {
-						ui.Text(c, "加载失败，点按重试").FontSize(12.5).TextColor(white.Alpha(0.7))
+						ui.Text(c, "加载失败，点按重试").FontSize(12.5).TextColor(ink.Alpha(0.7))
 					})
 					if retry.Clicked() {
 						a.loadComments()
 					}
 				case !cs.more:
-					ui.Text(c, "没有更多评论了").FontSize(12).TextColor(white.Alpha(0.35))
+					ui.Text(c, "没有更多评论了").FontSize(12).TextColor(ink.Alpha(0.35))
 				}
 			})
 			end = ui.Box(c.Key("end")).Height(0).Bounds()
@@ -241,31 +244,35 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 	}
 }
 
-func commentHeading(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(13).FontWeight(700).TextColor(white.Alpha(0.55)).LetterSpacing(0.2).Padding(18, 12, 6, 12)
+func commentHeading(c *ui.Context, title string) { commentHeadingIn(c, title, white) }
+
+// commentHeadingIn is commentHeading in ink.
+func commentHeadingIn(c *ui.Context, title string, ink ui.Color) {
+	ui.Text(c, title).FontSize(13).FontWeight(700).TextColor(ink.Alpha(0.55)).LetterSpacing(0.2).Padding(18, 12, 6, 12)
 }
 
 // commentRow is a comment: who wrote it, what, and what it replies to,
 // when, from where, and how many liked it, with a thumb to like it too.
 func (a *app) commentRow(c *ui.Context, cm *netease.Comment, now time.Time) {
+	ink := a.cmInk()
 	row := ui.Row(c).Padding(12).Gap(12).Radius(14).AlignItems(ui.Start)
 	a.commentIn(row)
 	row.Children(func() {
-		a.avatar(c, cm.User.AvatarURL, 34, white.Alpha(0.1))
+		a.avatar(c, cm.User.AvatarURL, 34, ink.Alpha(0.1))
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(6).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, cm.User.Nickname).FontSize(13).FontWeight(600).TextColor(white.Alpha(0.6)).SingleLine().Shrink(1).MinWidth(0)
+				ui.Text(c, cm.User.Nickname).FontSize(13).FontWeight(600).TextColor(ink.Alpha(0.6)).SingleLine().Shrink(1).MinWidth(0)
 				ui.Spacer(c)
 				a.commentDelete(c, cm)
 				a.commentLike(c.Key("like"), cm)
 			})
-			ui.Text(c, cm.Content).FontSize(15).LineHeight(1.55).TextColor(white.Alpha(0.92))
+			ui.Text(c, cm.Content).FontSize(15).LineHeight(1.55).TextColor(ink.Alpha(0.92))
 			if len(cm.BeReplied) > 0 {
 				r := cm.BeReplied[0]
-				ui.Box(c).Padding(8, 12).Radius(14).Background(white.Alpha(0.07)).Children(func() {
+				ui.Box(c).Padding(8, 12).Radius(14).Background(ink.Alpha(0.07)).Children(func() {
 					ui.RichText(c,
-						ui.Span{Text: "@" + r.User.Nickname + "：", Color: white.Alpha(0.75), Weight: 600},
-						ui.Span{Text: r.Content, Color: white.Alpha(0.6)},
+						ui.Span{Text: "@" + r.User.Nickname + "：", Color: ink.Alpha(0.75), Weight: 600},
+						ui.Span{Text: r.Content, Color: ink.Alpha(0.6)},
 					).FontSize(13).LineHeight(1.5).MaxLines(3)
 				})
 			}
@@ -273,7 +280,7 @@ func (a *app) commentRow(c *ui.Context, cm *netease.Comment, now time.Time) {
 			if loc := cm.IPLocation.Location; loc != "" {
 				meta += " · " + loc
 			}
-			ui.Text(c, meta).FontSize(11.5).TextColor(white.Alpha(0.38))
+			ui.Text(c, meta).FontSize(11.5).TextColor(ink.Alpha(0.38))
 		})
 	})
 }
@@ -281,13 +288,14 @@ func (a *app) commentRow(c *ui.Context, cm *netease.Comment, now time.Time) {
 // commentLike is a comment's thumb, with how many liked it, which likes it
 // or unlikes it: in red once liked.
 func (a *app) commentLike(c *ui.Context, cm *netease.Comment) {
-	label, fg := "赞", white.Alpha(0.42)
+	ink := a.cmInk()
+	label, fg := "赞", ink.Alpha(0.42)
 	if cm.Liked {
 		label, fg = "取消赞", a.pal.accent
 	}
 	b := ui.ButtonBase(c).Gap(4).Padding(3, 6).Margin(-3, -6).Radius(999).AlignItems(ui.Center).FocusRing(false).Label(label)
 	if b.Hovered() && !cm.Liked {
-		fg = white.Alpha(0.75)
+		fg = ink.Alpha(0.75)
 	}
 	b.TextColor(b.AnimateColor("fg", fg, motionHover))
 	b.Children(func() {

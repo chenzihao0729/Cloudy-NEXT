@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
@@ -209,5 +210,111 @@ func TestGlassBackgroundRests(t *testing.T) {
 		if tt.FramePending() {
 			t.Fatal("static cover background is still asking for frames")
 		}
+	}
+}
+
+// Windows's transparency effects turned off ask for opaque surfaces: the
+// glass the app draws itself goes solid, whatever the listener chose, and
+// comes back as they are turned on; the choice itself is neither changed nor
+// saved.
+func TestOpaqueDesktopMakesGlassSolid(t *testing.T) {
+	a := newTestApp()
+	a.settings.LiquidGlass, a.settings.GlassPanels = true, true
+	tt := ui.NewTester(a.view, 1100, 700)
+	a.sysOpaque = true
+	tt.Frame()
+	if a.settings.playerGlass() || a.settings.panelGlass() || a.liquidOK() {
+		t.Error("glass with the desktop asking for opaque surfaces")
+	}
+	if !a.settings.LiquidGlass || !a.settings.GlassPanels {
+		t.Error("the listener's choice of glass changed")
+	}
+	b, _ := json.Marshal(a.settings)
+	if containsKey(b, "opaque") {
+		t.Error("the desktop's preference was saved with the settings")
+	}
+	a.sysOpaque = false
+	tt.Frame()
+	if !a.settings.playerGlass() || !a.settings.panelGlass() {
+		t.Error("the glass did not come back with transparency on")
+	}
+}
+
+func containsKey(b []byte, key string) bool {
+	var m map[string]any
+	json.Unmarshal(b, &m)
+	_, ok := m[key]
+	return ok
+}
+
+// Dark mode keeps how clear its glass is apart from light mode's, once set
+// there; until then it takes light mode's, as settings from before it did.
+func TestGlassClearPerTheme(t *testing.T) {
+	s := defaultSettings()
+	json.Unmarshal([]byte(`{"glassClear":0.8}`), &s)
+	if s.glassClear(true) != 0.8 || s.glassClear(false) != 0.8 {
+		t.Fatalf("clear before dark mode had its own: %v %v", s.glassClear(false), s.glassClear(true))
+	}
+	dark := 0.3
+	s.GlassClearDark = &dark
+	b, _ := json.Marshal(s)
+	back := defaultSettings()
+	json.Unmarshal(b, &back)
+	if back.glassClear(true) != 0.3 || back.glassClear(false) != 0.8 {
+		t.Errorf("each theme's clear after saving: light %v, dark %v", back.glassClear(false), back.glassClear(true))
+	}
+}
+
+// Dense glass lifts black more than thin, in light mode, and dims white
+// more, in dark mode; thin light glass lifts black less than it used to,
+// so what shows through stays vivid.
+func TestBarGlassTones(t *testing.T) {
+	for _, clear := range []float32{0, 0.6, 1} {
+		thin, dense := barGlass{clear: clear}.tones()
+		if !(thin[0] < dense[0]) || thin[0] >= 0.62-0.4*clear {
+			t.Errorf("light, clear %v: thin %v dense %v", clear, thin, dense)
+		}
+		thin, dense = barGlass{dark: true, clear: clear}.tones()
+		if !(thin[1] > dense[1]) || thin[1] > 1 {
+			t.Errorf("dark, clear %v: thin %v dense %v", clear, thin, dense)
+		}
+	}
+}
+
+// By default the places glazed are as 1.3.6 had them: the bar liquid,
+// the menus and the dialogs frosted (liquid with the global glass); the
+// analysis cards, new, liquid. Each can be the other apart from the rest,
+// which stays so once saved.
+func TestGlassScenesChooseFrost(t *testing.T) {
+	a := newTestApp()
+	for _, c := range []struct {
+		scene   glassScene
+		frosted bool
+	}{{sceneBar, false}, {sceneMenu, true}, {sceneDialog, true}, {sceneAnalysis, false}} {
+		if a.settings.frosted(c.scene) != c.frosted {
+			t.Errorf("scene %d frosted %v by default", c.scene, !c.frosted)
+		}
+	}
+	a.settings.GlobalGlass = true
+	if a.settings.frosted(sceneMenu) || a.settings.frosted(sceneDialog) {
+		t.Error("the global glass does not make the panes liquid, as 1.3.6 did")
+	}
+	a.settings.GlobalGlass = false
+	if _, ok := a.barMaterial(false).(barGlass); !ok {
+		t.Error("the bar is not liquid glass by default")
+	}
+	a.settings.MenuLiquid, a.settings.DialogLiquid = true, true
+	if g := a.paneGlass(false, 0, sceneDialog); g.frost <= a.paneGlass(false, 0, sceneMenu).frost || g.veil[1] <= 0.5 {
+		t.Errorf("a dialog's glass is not denser than a menu's: %+v", g)
+	}
+	a.settings.BarFrost, a.settings.DialogLiquid = true, false
+	if _, ok := a.barMaterial(false).(glass.Glass); !ok {
+		t.Error("the bar frosted is not the plugin's glass")
+	}
+	b, _ := json.Marshal(a.settings)
+	back := defaultSettings()
+	json.Unmarshal(b, &back)
+	if !back.frosted(sceneBar) || back.frosted(sceneMenu) || !back.frosted(sceneDialog) {
+		t.Error("each scene's glass did not survive being saved")
 	}
 }

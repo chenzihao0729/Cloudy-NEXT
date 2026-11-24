@@ -91,7 +91,7 @@ func TestQuietCard(t *testing.T) {
 		if err := tt.Click("查看评论"); err != nil {
 			t.Fatal(err)
 		}
-		if a.npPane != paneComments {
+		if !a.npComments {
 			t.Errorf("pane %d: the comment did not open the comments", pane)
 		}
 	}

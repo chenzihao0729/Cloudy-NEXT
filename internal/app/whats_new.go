@@ -29,6 +29,9 @@ type whatsNewState struct {
 	// cover also says that the cover backgrounds are on, which came on by
 	// themselves with the update that brought them.
 	cover bool
+	// try also says, once, what there is to try that the update left off:
+	// the liquid glass of the menus and the dialogs, and the analysis pane.
+	try bool
 }
 
 // releaseRepo is where the releases, and their notes, are.
@@ -82,13 +85,14 @@ func (a *app) noteVersion(current string) {
 		notes = n.Notes
 	}
 	cover := updated && !s.CoverNoticed && !s.GlobalGlass && (s.sidebarGlass() || s.mainGlass())
-	s.LastVersion, s.UpdateNotes, s.CoverNoticed = current, nil, true
+	try := updated && !s.TryNoticed
+	s.LastVersion, s.UpdateNotes, s.CoverNoticed, s.TryNoticed = current, nil, true, true
 	s.save()
 	if !updated {
 		return
 	}
 	w := &a.whatsNew
-	*w = whatsNewState{open: true, version: current, notes: notes, cover: cover}
+	*w = whatsNewState{open: true, version: current, notes: notes, cover: cover, try: try}
 	if notes != "" {
 		return
 	}
@@ -114,8 +118,8 @@ func (a *app) whatsNewDialog(c *ui.Context) {
 	w := &a.whatsNew
 	p, ink := a.pal, a.inkOn(false)
 	a.dialog(c, "whats-new", 0.35, &w.open, func(panel ui.Element) {
-		a.pane(panel, 26, false)
-		panel.Width(440).TextColor(ink.text).Label("更新内容")
+		a.dialogPane(panel, 26, false)
+		panel.Width(560).TextColor(ink.text).Label("更新内容")
 		dialogHeader(c, ink, "已更新到 "+strings.TrimPrefix(w.version, "v"), "本次更新内容", func() { w.open = false })
 		ui.Column(c).Padding(0, 28).Gap(12).Children(func() {
 			if w.cover {
@@ -125,19 +129,37 @@ func (a *app) whatsNewDialog(c *ui.Context) {
 						FontSize(13).LineHeight(1.5).TextColor(ink.text).Shrink(1).MinWidth(0)
 				})
 			}
+			if w.try {
+				ui.Column(c).Gap(10).Padding(14, 16).Radius(14).Background(p.accent.Alpha(0.1)).Children(func() {
+					tip := func(text string) {
+						ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
+							ui.Icon(c, iconSparkles).Size(16, 16).Shrink(0).TextColor(p.accent)
+							ui.Text(c, text).FontSize(13.5).LineHeight(1.6).TextColor(ink.text).Shrink(1).MinWidth(0)
+						})
+					}
+					tip("液态玻璃更新了：会随背景调整浓淡、边缘折射。菜单、对话框和设置默认还是毛玻璃，想试试可以在「设置 → 外观 → 自定义材质」里改成液态玻璃。")
+					tip("播放页新增「分析」：打开播放页，点上方的「分析」，可以看立体声频谱、频谱瀑布、响度、速度（BPM）等。")
+				})
+			}
 			switch {
 			case w.loading:
 				ui.Text(c, "正在获取更新内容…").FontSize(13).TextColor(ink.muted)
 			case len(updateNotesLines(w.notes)) > 0:
-				a.notesBox(c, w.version, w.notes, ink)
+				a.notesBoxSized(c, w.version, w.notes, ink, 340, 13)
 			default:
 				ui.Text(c, "没能获取更新内容，可以到 GitHub 查看。").FontSize(13).TextColor(ink.muted)
 			}
 		})
-		dialogFooter(c, func() {
-			if w.cover && settingButton(c.Key("open-effects"), ink, "去设置", nil, false, false).Clicked() {
+		// The actions sit at the right of the update notes.
+		ui.Row(c).Padding(16, 28, 22, 28).Gap(10).AlignItems(ui.Center).Children(func() {
+			ui.Spacer(c)
+			if (w.cover || w.try) && settingButton(c.Key("open-effects"), ink, "去设置", nil, false, false).Clicked() {
 				w.open = false
 				a.openSettingsAt(settingsAppearance)
+			}
+			if w.try && a.pl.Current() != nil && settingButton(c.Key("open-analysis"), ink, "打开分析页", nil, false, false).Clicked() {
+				w.open = false
+				a.nowPlaying, a.npPane = true, paneAnalysis
 			}
 			if !w.loading && w.notes == "" && settingButton(c.Key("github"), ink, "在 GitHub 查看", nil, false, false).Clicked() {
 				mygo.Shell.OpenExternal("https://github.com/" + releaseRepo + "/releases/tag/v" + strings.TrimPrefix(w.version, "v"))

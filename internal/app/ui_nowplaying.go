@@ -9,6 +9,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 var white = ui.RGB(255, 255, 255)
@@ -79,6 +80,12 @@ func (a *app) npProgress(root ui.Element, open bool) float32 {
 // staying put where it is at full size, so that nothing in it stretches.
 func (a *app) nowPlayingLayer(c *ui.Context, open, settled bool) {
 	w, h := c.Size()
+	// The player measures the analysis only while its pane shows.
+	player.SetAnalyzing(open && a.npPane == paneAnalysis)
+	if !open || a.npPane != paneAnalysis {
+		// Shown again, its sleeve is there already, not coming in.
+		a.an.sleeveTrack = 0
+	}
 	k := a.npK
 	dim := 0.4 * k
 	if a.settings.GlobalGlass {
@@ -172,13 +179,20 @@ func (a *app) nowPlayingView(c *ui.Context) {
 	calm := a.npCalmness(c, root, pointerIn)
 	// The tabs and the buttons over the view show with the pointer in it,
 	// unless it has been still a while.
-	controls := pointerIn && !a.more.npCalm.calm
+	// A menu open from it (律动效果, the song's menu) takes the pointer out
+	// of the view, over it: the controls stay while it is open, the one
+	// it came from among them.
+	controls := (pointerIn || a.menu.open) && !a.more.npCalm.calm
 	k := a.npK
 	if k < 1 {
 		// The view comes in through the bar's glass, and what is on it later,
 		// once there is room for it.
 		root.Opacity(easeRange(k, 0, 0.3))
 	}
+	if !commentable(tr) {
+		a.npComments = false
+	}
+	a.npDrawer = root.AnimateTo("comments", b2f(a.npComments), npDrawerMove)
 	root.Children(func() {
 		a.backdrop(c, shown, tint, artOpacity)
 
@@ -188,6 +202,7 @@ func (a *app) nowPlayingView(c *ui.Context) {
 		if k < 1 {
 			body.Opacity(easeRange(k, npTextStart, 0.95))
 		}
+		a.commentDrawer(c, tr, w)
 		a.npCalmCover(c)
 	})
 }
@@ -201,9 +216,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 	// An episode has what it is about and its captions in place of lyrics;
 	// a song, lyrics in place of those.
 	switch program := tr.ProgramID != 0; {
-	case a.npPane == paneComments && !commentable(tr):
-		a.npPane = a.lyricsPaneChosen()
-	case program && (a.npPane == paneWall || a.npPane == paneWiki):
+	case program && (a.npPane == paneWall || a.npPane == paneWiki || a.npPane == paneAnalysis):
 		a.npPane = paneQueue
 	case program && (a.npPane == paneLyrics || a.npPane == paneStage):
 		a.npPane = paneProgram
@@ -216,6 +229,9 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		a.npPane = a.lyricsPaneChosen()
 	case a.npPane == paneWiki && !wikiShown(tr):
 		a.npPane = a.lyricsPaneChosen()
+	case a.npPane == paneComments:
+		// The comments are a drawer now, not a pane.
+		a.npPane, a.npComments = a.lyricsPaneChosen(), commentable(tr)
 	}
 	if a.npPane != paneQueue {
 		a.queueAt = -1
@@ -242,13 +258,22 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		if a.npPane == paneStage {
 			// The stage takes the whole view: the lyrics are the show, the
 			// controls a slim bar at the foot.
+			// Calm, all but the lyrics and the progress fade away, as on
+			// the lyrics.
 			tabs := npTabsRow(c, w)
-			reveal(tabs, pointerIn).Children(func() {
+			npFade(reveal(tabs, pointerIn), npCalmFade(calm)).Children(func() {
 				a.paneTabs(c, tabs)
 				a.stageStyleButton(c)
 			})
 			a.stage(c, tr, accent)
-			a.stageBar(c, tr, art, accent)
+			a.stageBar(c, tr, art, accent, calm)
+			return
+		}
+		if a.npPane == paneAnalysis {
+			// The analysis takes the whole view too.
+			tabs := npTabsRow(c, w)
+			npFade(reveal(tabs, pointerIn), npCalmFade(calm)).Children(func() { a.paneTabs(c, tabs) })
+			a.analysisPane(c, tr, art, accent, w, h, pointerIn, calm)
 			return
 		}
 		if a.npPane == paneWall {
@@ -321,10 +346,13 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		// Calm, the room under the column for the lyrics' tools is gone.
 		foot := lerp(npRowFoot, npCalmFoot, lay)
 		padX := npSideX(w)
-		a.more.npPaneW = w - 2*padX - side - npGapX(w)
+		// The comments, out, take their room from the pane's right, where
+		// the window has it to spare.
+		padR := padX + a.npDrawer*npDrawerRoom(w)
+		a.more.npPaneW = w - padX - padR - side - npGapX(w)
 		tabs := npTabsRow(c, w)
 		npFade(reveal(tabs, pointerIn), npCalmFade(calm)).Children(func() { a.paneTabs(c, tabs) })
-		row := ui.Row(c.Key("np-row")).Grow(1).Padding(0, padX, foot, padX).Gap(npGapX(w)).AlignItems(ui.Stretch)
+		row := ui.Row(c.Key("np-row")).Grow(1).Padding(0, padR, foot, padX).Gap(npGapX(w)).AlignItems(ui.Stretch)
 		row.Children(func() {
 			var coverTop float32
 			var volume ui.Element
@@ -352,8 +380,8 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				}
 				actions := func(size float32) {
 					a.likeCountButton(c.Key("like"), tr, size, white.Alpha(0.7))
-					a.dislikeButton(c, tr, size, white.Alpha(0.7))
 					a.commentCountButton(c.Key("comment-count"), tr, size, white.Alpha(0.7))
+					a.dislikeButton(c, tr, size, white.Alpha(0.7))
 				}
 				switch {
 				case cardA:
@@ -613,6 +641,7 @@ const (
 	paneCaptions
 	paneWall
 	paneWiki
+	paneAnalysis
 )
 
 // npTab is a tab of Now Playing: its pane, and what it says.
@@ -629,12 +658,11 @@ func (a *app) npTabs() []npTab {
 		if a.captionsShown() {
 			tabs = append(tabs, npTab{paneCaptions, "字幕"})
 		}
-		return append(tabs, npTab{paneQueue, "待播清单"}, npTab{paneComments, "评论"})
+		return append(tabs, npTab{paneQueue, "待播清单"})
 	}
-	tabs := []npTab{{paneLyrics, "歌词"}, {paneStage, "律动"}, {paneQueue, "待播清单"}, {paneWall, "选歌"}}
-	if commentable(a.pl.Current()) {
-		tabs = append(tabs, npTab{paneComments, "评论"})
-	}
+	// The comments have no tab: they come out from the right, in their
+	// drawer, from the comments button (ui_comment_drawer.go).
+	tabs := []npTab{{paneLyrics, "歌词"}, {paneStage, "律动"}, {paneAnalysis, "分析"}, {paneQueue, "待播清单"}, {paneWall, "选歌"}}
 	if wikiShown(a.pl.Current()) {
 		tabs = append(tabs, npTab{paneWiki, "百科"})
 	}
@@ -722,11 +750,12 @@ func qualityBadge(c *ui.Context, st *netease.Stream) {
 
 // stageBar is the slim bar along the foot of the stage: what plays, where
 // it is, and the controls.
-func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui.Color) {
+func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui.Color, calm float32) {
 	pl := a.pl
 	ui.Column(c).Padding(0, 48, 28, 48).Gap(10).Children(func() {
 		a.scrubber(c.Key("stage-scrub"), &a.npScrub, white.Alpha(0.18), white.Alpha(0.9), 14, accent.Mix(white, 0.35))
-		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
+		// Calm, what plays and the controls fade, the progress stays.
+		npFade(ui.Row(c.Key("stage-controls")), npCalmFade(calm)).Gap(14).AlignItems(ui.Center).Children(func() {
 			ui.Row(c).Grow(1).Basis(0).MinWidth(0).Gap(12).AlignItems(ui.Center).Children(func() {
 				if bmp := bitmap(art); bmp != nil {
 					cov := ui.Box(c.Key(tr.ID)).Size(44, 44).Label("律动封面")
@@ -739,8 +768,8 @@ func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 					a.artistLinks(c, tr, white.Alpha(0.55), white).FontSize(12).SingleLine()
 				})
 				a.likeCountButton(c.Key("like"), tr, 17, white.Alpha(0.6))
-				a.dislikeButton(c, tr, 17, white.Alpha(0.6))
 				a.commentCountButton(c.Key("comment-count"), tr, 17, white.Alpha(0.6))
+				a.dislikeButton(c, tr, 17, white.Alpha(0.6))
 				a.songMenu(c.Key("more"), tr, 17, white.Alpha(0.6)).Margin(0, 0, 0, -10)
 			})
 			a.transport(c, white, white.Alpha(0.45), white, 22)

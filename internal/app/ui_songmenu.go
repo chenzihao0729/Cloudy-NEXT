@@ -139,14 +139,16 @@ func (a *app) songHead(tr *netease.Track) func(c *ui.Context, ink paneInk) {
 	}
 }
 
-// songMenu is three dots that open the menu of tr, over Now Playing.
+// songMenu is three dots that open the menu of tr, over Now Playing. Its
+// menu takes the theme, as the player bar's does: a dark glass in a light
+// theme stood out (the user, 1.3.7-test.6).
 func (a *app) songMenu(c *ui.Context, tr *netease.Track, size float32, color ui.Color) ui.Element {
-	return a.songMenuLabeled(c, tr, true, size, color, "更多")
+	return a.songMenuLabeled(c, tr, false, size, color, "更多")
 }
 
 // songMenuLabeled is songMenu with the name its button is known by: the
-// player bar calls it details. onDark is for a button over Now Playing; the
-// player bar's menu takes the theme, as its other menus do.
+// player bar calls it details. onDark makes its menu dark whatever the
+// theme; both take the theme now.
 func (a *app) songMenuLabeled(c *ui.Context, tr *netease.Track, onDark bool, size float32, color ui.Color, label string, extra ...[]menuAction) ui.Element {
 	b := iconButton(c, iconMore, size, color, label).Tooltip(label)
 	if b.Clicked() {
@@ -186,5 +188,5 @@ func (a *app) compactPlayerActions(tr *netease.Track) []menuAction {
 // songContext opens the menu of tr, listed in pid if set, on a right click
 // on el, what shows it.
 func (a *app) songContext(el ui.Element, tr *netease.Track, pid int64) {
-	a.contextMenu(el, a.nowPlaying, func() [][]menuAction { return a.songActions(tr, pid) }, a.songHead(tr))
+	a.contextMenu(el, false, func() [][]menuAction { return a.songActions(tr, pid) }, a.songHead(tr))
 }

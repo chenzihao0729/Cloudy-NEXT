@@ -127,6 +127,10 @@ func familyOf(id string) string {
 	return defaultFontFamily()
 }
 
+// readFontFile reads a font file: a variable, for tests to count what the
+// settings read.
+var readFontFile = os.ReadFile
+
 // loadFont registers the files of the font chosen, the first time it is
 // chosen: their tens of MB stay on disk for those who read another font.
 // A font that won't load leaves its family to the system's fallback.
@@ -160,7 +164,7 @@ func (a *app) loadFontOf(id string) {
 		return
 	}
 	for _, name := range f.files {
-		b, err := os.ReadFile(filepath.Join(dir, "fonts", name))
+		b, err := readFontFile(filepath.Join(dir, "fonts", name))
 		if err == nil {
 			err = ui.RegisterFont(b, "")
 		}
@@ -173,50 +177,6 @@ func (a *app) loadFontOf(id string) {
 		a.fontsLoaded = map[string]bool{}
 	}
 	a.fontsLoaded[f.id] = true
-}
-
-// loadFontFiles registers the fonts that come as files, off the main thread
-// as far as it can, for the list of fonts to show each in its own.
-func (a *app) loadFontFiles() {
-	if a.fontsAsked {
-		return
-	}
-	a.fontsAsked = true
-	var wanted []uiFont
-	for _, f := range a.fontChoices() {
-		if len(f.files) > 0 && !a.fontsLoaded[f.id] {
-			wanted = append(wanted, f)
-		}
-	}
-	dir, err := mygo.App.Path(mygo.PathResources)
-	if err != nil {
-		return
-	}
-	go func() {
-		for _, f := range wanted {
-			var data [][]byte
-			for _, name := range f.files {
-				if b, err := os.ReadFile(filepath.Join(dir, "fonts", name)); err == nil {
-					data = append(data, b)
-				}
-			}
-			a.post(func() {
-				if a.fontsLoaded[f.id] {
-					return
-				}
-				for _, b := range data {
-					if err := ui.RegisterFont(b, ""); err != nil {
-						log.Printf("font %s: %v", f.id, err)
-						return
-					}
-				}
-				if a.fontsLoaded == nil {
-					a.fontsLoaded = map[string]bool{}
-				}
-				a.fontsLoaded[f.id] = true
-			})
-		}
-	}()
 }
 
 // fontChoices returns the fonts this computer can show, read once.
@@ -258,7 +218,7 @@ func registerImportedFont(file string) error {
 	if err != nil {
 		return err
 	}
-	b, err := os.ReadFile(filepath.Join(dir, file))
+	b, err := readFontFile(filepath.Join(dir, file))
 	if err != nil {
 		return err
 	}

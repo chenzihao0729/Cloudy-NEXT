@@ -9,12 +9,15 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-// The count on the comments' tab holds the last song's while the next
-// one's loads, for it to roll from one to the other, and goes once the
-// next song turns out to have none.
+// The count over the comments' drawer holds the last song's while the
+// next one's loads, for it to roll from one to the other, and goes once
+// the next song turns out to have none.
 func TestCommentCountHoldsWhileLoading(t *testing.T) {
 	a, tt, _ := coverApp(t)
+	a.npComments = true
 	a.comments = commentState{track: 2, loaded: true, total: 128}
+	tt.Frame()
+	tt.Advance(time.Second)
 	tt.Frame()
 	a.pl.Next()
 	a.comments = commentState{track: 3, loading: true}
@@ -65,8 +68,8 @@ func TestEpisodeComments(t *testing.T) {
 	}
 	tt.Advance(time.Second)
 	tt.Frame()
-	if a.npPane != paneComments {
-		t.Errorf("on pane %d", a.npPane)
+	if !a.npComments || a.npPane != paneProgram {
+		t.Errorf("comments out %v, on pane %d", a.npComments, a.npPane)
 	}
 }
 
@@ -85,7 +88,9 @@ func TestLikeComment(t *testing.T) {
 	a.profile = &netease.Profile{UserID: 1}
 	cm := netease.Comment{ID: 9, Content: "好听", LikedCount: 41}
 	a.comments = commentState{track: 2, thread: "R_SO_4_2", loaded: true, total: 1, hot: []netease.Comment{cm}, latest: []netease.Comment{cm}}
-	a.npPane = paneComments
+	a.npComments = true
+	tt.Frame()
+	tt.Advance(time.Second)
 	tt.Frame()
 	if err := tt.Click("赞"); err != nil {
 		t.Fatal(err)

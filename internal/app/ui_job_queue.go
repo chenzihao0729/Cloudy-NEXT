@@ -302,7 +302,7 @@ func (a *app) queueDialog(c *ui.Context, q *queueWindow, entries []queueEntry, w
 		// three songs are not lost in a tall empty pane.
 		tall := min(560, h-80)
 		panel.Width(min(680, w-80)).Height(min(tall, max(300, 170+float32(len(entries))*66))).TextColor(ink.text)
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Children(func() {
 			dialogHeader(c, ink, spec.title, sub, func() { q.open = false })
 			fill, edge := a.cardColors()

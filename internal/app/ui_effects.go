@@ -123,7 +123,7 @@ func (a *app) effectsDialog(c *ui.Context) {
 	v.held = false
 	a.dialog(c, "effects", 0.35, &v.open, func(panel ui.Element) {
 		panel.Width(pw).MaxHeight(h - 56).TextColor(ink.text)
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Children(func() {
 			dialogHeader(c, ink, "音效", "", func() { v.open = false })
 			k := &settingsKit{a: a, ink: ink}

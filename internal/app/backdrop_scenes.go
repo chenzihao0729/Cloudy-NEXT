@@ -100,14 +100,14 @@ func Fragment(dst vec4, pos vec2) vec4 {
 	lamp := vec2(0.14*aspect, 0.04)
 	glow := exp(-dot(p-lamp, p-lamp) * 1.5)
 	c := Deep.rgb * (1.15 - 0.45*uv.y)
-	c += A.rgb * glow * (0.11 + 0.08*Bass)
-	c += C.rgb * glow * glow * (0.035 + 0.03*Bass)
+	c += A.rgb * glow * (0.11 + 0.04*Bass)
+	c += C.rgb * glow * glow * (0.035 + 0.015*Bass)
 	// The haze, billowing as the fog does, brightest in the lamp's light.
 	fp := p * 1.7
 	rise := vec2(t*0.012, t*0.03)
 	q := fbm(fp + rise + vec2(0, t*0.02))
 	haze := smoothstep(0.32, 0.8, fbm(fp+rise+vec2(5.2, 1.3)+1.1*q))
-	c += mix(A.rgb, B.rgb, 0.4) * haze * (0.05 + 0.11*glow) * (0.85 + 0.4*Bass)
+	c += mix(A.rgb, B.rgb, 0.4) * haze * (0.05 + 0.11*glow) * (0.9 + 0.2*Bass)
 	for i := 0; i < 28; i++ {
 		n := float(i)
 		h1 := hash1(n*4.0 + 0.3)
@@ -121,8 +121,15 @@ func Fragment(dst vec4, pos vec2) vec4 {
 		rad = mix(rad, 0.26+0.14*h3, huge)
 		soft := mix(mix(0.62, 0.16, near), 0.5, huge)
 		speed := mix(0.4, 1.0, near) * (0.5 + 0.5*h4)
-		// Spread evenly across, each then swaying about its place.
-		at := vec2(fract(n*0.618034+0.13*h1)*(aspect+0.4)-0.2, fract(n*0.754878+0.2*h2-t*0.008*speed)*1.5-0.25)
+		// Spread evenly across, each then swaying about its place. Each
+		// rises through a span that takes it, sway and all, wholly out of
+		// sight at both ends, at the same pace on screen whatever the
+		// span: the three close to the lens, a third of the height
+		// across, wrapped round with their soft rims still in sight in a
+		// span of 1.5, if too faint to see.
+		span := max(1.5, 1.0+2.0*(rad+0.03))
+		climb := fract(n*0.754878+0.2*h2-t*0.012*speed/span)*span - (span-1.0)/2.0
+		at := vec2(fract(n*0.618034+0.13*h1)*(aspect+0.4)-0.2, climb)
 		at += vec2(0.04*sin(t*(0.1+0.12*h4)+h2*6.28), 0.025*sin(t*(0.15+0.1*h1)+h4*6.28))
 		rel := (p - at) / rad
 		d := length(rel)
@@ -136,7 +143,7 @@ func Fragment(dst vec4, pos vec2) vec4 {
 			breath := 0.72 + 0.28*sin(t*(0.25+0.4*h2)+h3*30.0)
 			lit := 0.55 + 1.1*exp(-dot(at-lamp, at-lamp)*1.2)
 			amt := mix(0.06+0.06*h3, 0.1+0.1*h3, near)
-			amt = mix(amt, 0.035, huge) * breath * lit * (0.85 + 0.45*Bass)
+			amt = mix(amt, 0.035, huge) * breath * lit * (0.9 + 0.2*Bass)
 			light := col*(disc*shade*amt) + mix(col, vec3(1), 0.45)*(rim*amt*0.85)
 			c = screen(c, light)
 		}
@@ -466,6 +473,9 @@ type backdropScene struct {
 	// own says its colors are for the cover as it is, gray or not,
 	// rather than for one made rich.
 	own bool
+	// silk says it is the silk (backdrop_silk.go), which takes the
+	// cover's colors and the pointer besides.
+	silk bool
 }
 
 var starsOverShader = sync.OnceValue(func() *shader.Shader { return shader.MustCompile(starsOverSource) })
@@ -474,6 +484,8 @@ var starsOverShader = sync.OnceValue(func() *shader.Shader { return shader.MustC
 // who chose none.
 var backdropScenes = []backdropScene{
 	{id: "", label: "烟雾"},
+	// Second, beside the fog (the user, 1.3.7-test.6).
+	{id: "silk", label: "丝绸", shader: silkShader, silk: true},
 	{id: "bokeh", label: "光斑", shader: sync.OnceValue(func() *shader.Shader { return shader.MustCompile(bokehSource) }),
 		colors: func(h, s float64) (deep, a, b, c ui.Color) {
 			return hsvColor(h, s, 0.19), hsvColor(h, s*0.85, 0.95), hsvColor(turnHue(h, 14), s*0.6, 0.95), hsvColor(turnHue(h, -10), s*0.25, 1)
@@ -567,16 +579,21 @@ func sceneColors(sc *backdropScene, tint ui.Color) (deep, a, b, c ui.Color) {
 // than the window. Its water, if it has any, takes drops as music
 // would let them fall.
 func drawScene(p *ui.Painter, r ui.Rect, style string, tint ui.Color, drift, bass float32) {
-	drawSceneDrops(p, r, style, tint, drift, bass, nil, nil)
+	drawSceneDrops(p, r, style, tint, drift, bass, nil, nil, nil)
 }
 
 // drawSceneDrops is drawScene with the drops the beat let fall, as
 // beatState.uniform gives them, and the leaves afloat on it, as
-// leafState.uniform does.
-func drawSceneDrops(p *ui.Painter, r ui.Rect, style string, tint ui.Color, drift, bass float32, drops, leaves []float32) {
+// leafState.uniform does; and for the silk, what it takes besides, or
+// nil for a picture of it.
+func drawSceneDrops(p *ui.Painter, r ui.Rect, style string, tint ui.Color, drift, bass float32, drops, leaves []float32, silk *silkInput) {
 	sc := backdropSceneOf(style)
 	if sc.shader == nil {
 		drawFog(p, r, tint, drift, bass)
+		return
+	}
+	if sc.silk {
+		drawSilk(p, r, tint, drift, bass, silk)
 		return
 	}
 	deep, a, b, c := sceneColors(sc, tint)

@@ -58,7 +58,7 @@ func (a *app) lyricDownloadDialog(c *ui.Context) {
 			}
 			group.Height((height + 18) * k).Opacity(k)
 		}
-		a.pane(panel, 26, a.nowPlaying)
+		a.dialogPane(panel, 26, a.nowPlaying)
 		panel.Children(func() {
 			dialogHeader(c, ink, "下载歌词", s.song.Name, func() { s.open = false })
 			ui.Column(c.Key("options")).PaddingX(28).Children(func() {

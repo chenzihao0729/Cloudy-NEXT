@@ -83,13 +83,12 @@ func (a *app) feedbackCard(c *ui.Context, ink paneInk) {
 			}
 		}
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			// Pictures go with the mail, and only with it.
-			add := settingButton(c.Key("feedback-add"), ink, "添加图片", iconPlus, !feedbackMailOpen || f.sending || len(f.images) >= feedbackImages, false)
-			if !feedbackMailOpen {
-				add.Tooltip("图片随邮件发送，邮件发送暂未开放")
-			}
-			if add.Clicked() {
-				a.pickFeedbackImages()
+			// Pictures go with the mail, and only with it: without it, they
+			// are added on GitHub or in the messages.
+			if feedbackMailOpen {
+				if settingButton(c.Key("feedback-add"), ink, "添加图片", iconPlus, f.sending || len(f.images) >= feedbackImages, false).Clicked() {
+					a.pickFeedbackImages()
+				}
 			}
 			note := ink.muted
 			if f.failed {
@@ -107,15 +106,17 @@ func (a *app) feedbackCard(c *ui.Context, ink paneInk) {
 				}
 				return
 			}
-			// Mail goes through a form some networks cannot reach: the
-			// author's Bilibili messages come first.
-			if !feedbackMailOpen {
-				settingButton(c.Key("feedback-send"), ink, "用邮件发送 · 未开放", nil, true, false).Tooltip("邮件发送暂未开放，修好后再上线")
-			} else if settingButton(c.Key("feedback-send"), ink, "用邮件发送", nil, f.sending || empty, false).Clicked() {
+			// Mail goes through a form some networks cannot reach, and is
+			// off: the author's Bilibili messages, and the issues on GitHub
+			// last, on the right, the way.
+			if feedbackMailOpen && settingButton(c.Key("feedback-send"), ink, "用邮件发送", nil, f.sending || empty, false).Clicked() {
 				a.sendFeedback()
 			}
-			if ui.PrimaryButton(c.Key("feedback-bilibili"), "发到 B 站私信").Disabled(empty).Clicked() {
+			if settingButton(c.Key("feedback-bilibili"), ink, "发到 B 站私信", nil, empty, false).Clicked() {
 				a.feedbackToBilibili()
+			}
+			if primaryButton(c.Key("feedback-issue"), "去 Issue 反馈", iconExternal, a.pal, false).Clicked() {
+				a.feedbackToIssue()
 			}
 		})
 	})

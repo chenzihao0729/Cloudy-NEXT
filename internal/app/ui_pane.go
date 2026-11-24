@@ -28,11 +28,19 @@ func (a *app) inkOn(onDark bool) paneInk {
 	return paneInk{ink, ink.Alpha(0.62), ink.Alpha(0.42), ink.Alpha(0.07), ink.Alpha(0.12), ink.Alpha(0.1)}
 }
 
-// pane gives e the look of a pane, rounded by radius. Glass lightens what
-// shows through in a light theme: a dark pane there takes more of its tint.
+// pane gives e the look of a pane, rounded by radius: a menu's, a
+// popover's or a toast's (sceneMenu). Glass lightens what shows through in
+// a light theme: a dark pane there takes more of its tint.
 func (a *app) pane(e ui.Element, radius float32, onDark bool) ui.Element {
 	e.Shadow(0, 18, 44, -12, ui.RGBA(0, 0, 0, 0.45))
-	return a.paneSurface(e, radius, onDark)
+	return a.paneSurfaceAt(e, radius, onDark, 0, sceneMenu)
+}
+
+// dialogPane is pane for a dialog or the settings (sceneDialog), which may
+// be glazed apart from the menus.
+func (a *app) dialogPane(e ui.Element, radius float32, onDark bool) ui.Element {
+	e.Shadow(0, 18, 44, -12, ui.RGBA(0, 0, 0, 0.45))
+	return a.paneSurfaceAt(e, radius, onDark, 0, sceneDialog)
 }
 
 // paneGrowing is pane for a pane on its way to its size, whose shorter side
@@ -40,28 +48,35 @@ func (a *app) pane(e ui.Element, radius float32, onDark bool) ui.Element {
 // than changing, blurring more and more, with each size on the way.
 func (a *app) paneGrowing(e ui.Element, radius float32, onDark bool, basis float32) ui.Element {
 	e.Shadow(0, 18, 44, -12, ui.RGBA(0, 0, 0, 0.45))
-	return a.paneSurfaceAt(e, radius, onDark, basis)
+	return a.paneSurfaceAt(e, radius, onDark, basis, sceneMenu)
 }
 
 // paneSurface is pane without its shadow, for a pane that casts its own.
 func (a *app) paneSurface(e ui.Element, radius float32, onDark bool) ui.Element {
-	return a.paneSurfaceAt(e, radius, onDark, 0)
+	return a.paneSurfaceAt(e, radius, onDark, 0, sceneMenu)
 }
 
 // paneSurfaceAt is paneSurface in the material of a pane whose shorter
-// side is basis, if not 0, whatever its size now.
-func (a *app) paneSurfaceAt(e ui.Element, radius float32, onDark bool, basis float32) ui.Element {
+// side is basis, if not 0, whatever its size now, glazed as the listener
+// chose for its scene: liquid glass, by default, or frosted.
+func (a *app) paneSurfaceAt(e ui.Element, radius float32, onDark bool, basis float32, scene glassScene) ui.Element {
 	e.Radius(radius)
 	dark := onDark || a.pal.dark
 	switch {
-	case a.settings.GlobalGlass:
-		g := a.interfaceGlass(dark)
-		g.basis = basis
-		return e.Material(g)
 	case !a.settings.panelGlass() && dark:
 		return e.Background(ui.Hex("#232327")).Border(0.5, white.Alpha(0.12))
 	case !a.settings.panelGlass():
 		return e.Background(ui.Hex("#f6f6f8")).Border(0.5, ui.RGBA(0, 0, 0, 0.12))
+	case !a.settings.frosted(scene):
+		return e.Material(a.paneGlass(dark, basis, scene))
+	}
+	return a.frostPane(e, onDark, basis)
+}
+
+// frostPane glazes e in frosted glass, the glass plugin's, tinted for the
+// words on it to read over anything.
+func (a *app) frostPane(e ui.Element, onDark bool, basis float32) ui.Element {
+	switch {
 	case a.pal.dark:
 		return e.Material(glass.Glass{Tint: ui.RGBA(14, 14, 18, 0.62), Basis: basis}).Border(0.5, white.Alpha(0.14))
 	case onDark:

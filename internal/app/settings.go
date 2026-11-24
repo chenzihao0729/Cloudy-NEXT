@@ -64,9 +64,24 @@ type settings struct {
 	// and GlassBend how far it bends what shows through.
 	GlassClear float64 `json:"glassClear"`
 	GlassBend  float64 `json:"glassBend"`
+	// GlassClearDark is GlassClear in dark mode, once set there: until
+	// then dark mode takes the light one's (glassClear).
+	GlassClearDark *float64 `json:"glassClearDark,omitempty"`
 	// GlassPanels makes menus, popovers, dialogs and the settings panes of
 	// glass, else plain, which takes less of the GPU. Off is kept too.
 	GlassPanels bool `json:"glassPanels"`
+	// BarFrost glazes the player bar (and the batch bar over it) in frosted
+	// glass, the glass plugin's, rather than the liquid glass of the bar's
+	// own shader (barGlass), as by default. MenuLiquid and DialogLiquid
+	// glaze the menus and popovers, and the dialogs and the settings, in
+	// liquid glass rather than frosted, as 1.3.6 had them and they stay by
+	// default (the user, 1.3.7-test.4); GlobalGlass makes them liquid too,
+	// as it did. AnalysisFrost frosts the analysis pane's cards, liquid by
+	// default.
+	BarFrost      bool `json:"barFrost,omitempty"`
+	MenuLiquid    bool `json:"menuLiquid,omitempty"`
+	DialogLiquid  bool `json:"dialogLiquid,omitempty"`
+	AnalysisFrost bool `json:"analysisFrost,omitempty"`
 	// Motion is how much the app moves: full, lite or off.
 	Motion string `json:"motion,omitempty"`
 	// AccentCover takes the accent from the cover playing: else the app's red.
@@ -92,6 +107,9 @@ type settings struct {
 	LastVersion  string       `json:"lastVersion,omitempty"`
 	UpdateNotes  *updateNotes `json:"updateNotes,omitempty"`
 	CoverNoticed bool         `json:"coverNoticed,omitempty"`
+	// TryNoticed is set once the listener was told, at the first launch
+	// after an update, of the liquid glass to try and the analysis pane.
+	TryNoticed bool `json:"tryNoticed,omitempty"`
 	// AlbumSort is how the albums the listener saved are listed: by time,
 	// name or artist; empty for the time.
 	AlbumSort string `json:"albumSort,omitempty"`
@@ -259,6 +277,11 @@ type settings struct {
 	path string // where they were loaded from, and are saved to
 	// loaded is whether they came from a file: the app ran here before.
 	loaded bool
+	// opaque is the desktop asking for opaque surfaces (Windows's
+	// transparency effects off): the glass the app draws itself, the player
+	// bar's, the panes' and the lenses', is solid then. It is not saved:
+	// view sets it from the desktop's preferences.
+	opaque bool
 }
 
 func defaultSettings() settings {
@@ -271,10 +294,47 @@ func baseSettings() settings {
 	return settings{Crossfade: true, CrossfadeSec: 2, BarSpin: true, GlobalKeys: true, NotchActivity: true, Quality: "exhigh", Appearance: "system", LiquidGlass: true, SidebarGlass: true, MainGlass: true, NpLight: true, GlowLevel: 0.5, GlassClear: 0.6, GlassBend: 0.3, GlassPanels: true, Volume: 0.8, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, LyricTrans: true, LyricBlur: true, NpCalm: true, LyricBlurLevel: 0.5, MoreWords: true, LyricTilt: 0.5, LyricBounce: 0.5, DeskWords: true}
 }
 
-func (s settings) playerGlass() bool  { return !s.PowerSaver && (s.GlobalGlass || s.LiquidGlass) }
-func (s settings) panelGlass() bool   { return !s.PowerSaver && (s.GlobalGlass || s.GlassPanels) }
+func (s settings) playerGlass() bool {
+	return !s.PowerSaver && !s.opaque && (s.GlobalGlass || s.LiquidGlass)
+}
+func (s settings) panelGlass() bool {
+	return !s.PowerSaver && !s.opaque && (s.GlobalGlass || s.GlassPanels)
+}
 func (s settings) sidebarGlass() bool { return !s.PowerSaver && (s.GlobalGlass || s.SidebarGlass) }
 func (s settings) mainGlass() bool    { return !s.PowerSaver && (s.GlobalGlass || s.MainGlass) }
+
+// glassScene is a place glazed one way or the other: liquid or frosted.
+type glassScene uint8
+
+const (
+	sceneMenu     glassScene = iota // menus, popovers, toasts, the tray's menu, floating bars
+	sceneDialog                     // dialogs and the settings
+	sceneBar                        // the player bar and the batch bar over it
+	sceneAnalysis                   // the analysis pane's cards
+)
+
+// frosted reports whether the scene is glazed in frosted glass rather than
+// liquid.
+func (s settings) frosted(scene glassScene) bool {
+	switch scene {
+	case sceneBar:
+		return s.BarFrost
+	case sceneAnalysis:
+		return s.AnalysisFrost
+	case sceneDialog:
+		return !s.DialogLiquid && !s.GlobalGlass
+	}
+	return !s.MenuLiquid && !s.GlobalGlass
+}
+
+// glassClear is how clear the glass is in dark mode or light: each keeps
+// its own, dark mode the light one's until it was set there.
+func (s settings) glassClear(dark bool) float32 {
+	if dark && s.GlassClearDark != nil {
+		return float32(*s.GlassClearDark)
+	}
+	return float32(s.GlassClear)
+}
 
 // mainWindowMaterial keeps the sidebar's material (Mica on Windows 11)
 // under the cover-colored background: the clear one (Acrylic) shows the

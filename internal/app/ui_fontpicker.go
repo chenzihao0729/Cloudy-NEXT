@@ -60,7 +60,7 @@ func (a *app) fontPickerDialog(c *ui.Context) {
 	w, h := c.Size()
 	a.dialog(c, "font-picker", 0.35, &p.open, func(panel ui.Element) {
 		panel.Width(min(560, w-80)).Height(min(640, h-56)).TextColor(ink.text)
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Children(func() {
 			title := "选择界面字体"
 			if p.lyric {

@@ -3,6 +3,9 @@ package app
 import (
 	"runtime"
 	"testing"
+	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // A font id kept in settings but no longer on offer reads as the default,
@@ -52,5 +55,33 @@ func TestCustomFonts(t *testing.T) {
 	got := a.fontFamily()
 	if def := defaultFontFamily(); def != "" && got != "Segoe Print, "+def {
 		t.Fatalf("family %q has no fallback", got)
+	}
+}
+
+// Opening the font settings used to read every bundled font into memory:
+// tens of MB for a font the listener never picks.
+func TestFontSettingsReadNoFontFiles(t *testing.T) {
+	reads := 0
+	old := readFontFile
+	readFontFile = func(name string) ([]byte, error) {
+		reads++
+		return old(name)
+	}
+	defer func() { readFontFile = old }()
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.settingsView.open, a.settingsView.tab = true, settingsAppearance
+	tt := ui.NewTester(a.view, 1000, 700)
+	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
+	tt.Frame()
+	if a.fontList == nil {
+		t.Fatal("the font settings did not show the fonts on offer")
+	}
+	// The files were read on a goroutine: give one time to have read them.
+	for deadline := time.Now().Add(300 * time.Millisecond); reads == 0 && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if reads != 0 {
+		t.Fatalf("the font settings read %d font files, want none until one is picked", reads)
 	}
 }

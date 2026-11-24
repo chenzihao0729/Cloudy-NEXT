@@ -1,7 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo/plugins/glass"
@@ -22,7 +24,10 @@ type scrubState struct {
 	// for a bar on glass.
 	lens bool
 	// lamp gives the bar its glow in Now Playing (ui_light.go).
-	lamp  bool
+	lamp bool
+	// wave shows the track's loudness along it behind the bar
+	// (player.Wave), in Now Playing.
+	wave  bool
 	level barState
 }
 
@@ -106,6 +111,9 @@ func (a *app) scrubber(c *ui.Context, st *scrubState, track, fill ui.Color, heig
 		}
 		y := r.Y + (r.H-thick)/2
 		head, cy := r.X+r.W*frac, r.Y+r.H/2
+		if st.wave {
+			drawWave(p, r, head, cy, height, thick, pl)
+		}
 		p.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: thick}, track, thick/2)
 		// What has downloaded, a shade lighter.
 		if got, ok := pl.Downloaded(); ok && float32(got) < 1 {
@@ -129,7 +137,12 @@ func (a *app) scrubber(c *ui.Context, st *scrubState, track, fill ui.Color, heig
 		} else if knob > 0.01 {
 			k := 12 * knob
 			p.Shadow(ui.Rect{X: head - k/2, Y: r.Y + (r.H-k)/2, W: k, H: k}, k/2, 0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.3))
-			p.Fill(ui.Rect{X: head - k/2, Y: r.Y + (r.H-k)/2, W: k, H: k}, fill, k/2)
+			p.Fill(ui.Rect{X: head - k/2, Y: r.Y + (r.H-k)/2, W: k, H: k}, solid(fill), k/2)
+		}
+		if pressed || st.active {
+			// Dragged, the time it would go to, to a tenth of a second,
+			// over the knob.
+			drawScrubTime(p, r, head, cy-max(thick, 12*knob)/2, at)
 		}
 		switch {
 		case smoking > 0.01 && (pl.Playing() || smoking < 1):
@@ -146,6 +159,92 @@ func (a *app) scrubber(c *ui.Context, st *scrubState, track, fill ui.Color, heig
 	})
 	return s
 }
+
+// drawWave draws the loudness of the track playing along r as its
+// waveform: an outline swelling over and under the bar where the music
+// is loud and narrowing where it is quiet, measured against the track's
+// own loudest, what has played (left of head) lighter; as far as it is
+// measured yet.
+func drawWave(p *ui.Painter, r ui.Rect, head, cy, height, thick float32, pl *player.Player) {
+	vals, filled := pl.Wave()
+	if filled < 2 {
+		if pl.Current() != nil {
+			p.After(300 * time.Millisecond)
+		}
+		return
+	}
+	drawWaveOf(p, r, head, cy, height, thick, &vals, filled)
+	if filled < player.WaveBuckets {
+		// Measuring still: it fills in as it goes.
+		p.After(250 * time.Millisecond)
+	}
+}
+
+// drawWaveOf is drawWave of vals, measured as far as filled.
+func drawWaveOf(p *ui.Painter, r ui.Rect, head, cy, height, thick float32, vals *[player.WaveBuckets]float32, filled int) {
+	// Against the loud parts of the song, not its one loudest moment,
+	// which would flatten the rest.
+	sorted := slices.Clone(vals[:filled])
+	slices.Sort(sorted)
+	loudest := sorted[int(0.97*float32(filled-1))]
+	if loudest <= 0 {
+		return
+	}
+	// Eased over its neighbors, for an outline rather than a comb, and
+	// curved, for the swells and the quiet parts to stand apart.
+	full := height + 16
+	at := func(i int) (x, h float32) {
+		var v, wsum float32
+		for d, wt := range [5]float32{0.1, 0.2, 0.4, 0.2, 0.1} {
+			if j := i + d - 2; j >= 0 && j < filled {
+				v += vals[j] * wt
+				wsum += wt
+			}
+		}
+		v /= wsum
+		k := float32(math.Pow(float64(clamp01(v/loudest)), 2.2))
+		// The quiet goes thinner than the bar, the loud well over it.
+		return r.X + r.W*(float32(i)+0.5)/player.WaveBuckets, 1.5 + k*(full-1.5)
+	}
+	var path ui.Path
+	x0, h0 := at(0)
+	path.MoveTo(r.X, cy-h0/2)
+	path.LineTo(x0, cy-h0/2)
+	for i := 1; i < filled; i++ {
+		x, h := at(i)
+		path.LineTo(x, cy-h/2)
+	}
+	for i := filled - 1; i >= 0; i-- {
+		x, h := at(i)
+		path.LineTo(x, cy+h/2)
+	}
+	path.LineTo(r.X, cy+h0/2).Close()
+	p.FillPath(&path, white.Alpha(0.14))
+	if head > r.X {
+		p.Clip(ui.Rect{X: r.X, Y: cy - full, W: head - r.X, H: 2 * full}, 0, func() { p.FillPath(&path, white.Alpha(0.3)) })
+	}
+}
+
+// drawScrubTime draws the time at, in seconds, in a little bubble over
+// (x, top), kept within r's width.
+func drawScrubTime(p *ui.Painter, r ui.Rect, x, top float32, at float64) {
+	// To the second, as the times either side show it (the user,
+	// 1.3.7-test.6: tenths were more than anyone drags to).
+	s := int(max(0, at))
+	text := fmt.Sprintf("%d:%02d", s/60, s%60)
+	sp := ui.Span{Text: text, Size: 12, Weight: 700, Color: white, Features: "tnum"}
+	tw, th := p.MeasureText(200, sp)
+	w, h := tw+16, th+8
+	bx := min(max(x-w/2, r.X), r.X+r.W-w)
+	b := ui.Rect{X: bx, Y: top - 8 - h, W: w, H: h}
+	p.Shadow(b, h/2, 0, 2, 8, 0, ui.RGBA(0, 0, 0, 0.3))
+	p.Fill(b, ui.RGBA(24, 24, 28, 0.92), h/2)
+	p.RichText(b.X+8, b.Y+4, 200, sp)
+}
+
+// solid is c with no transparency: a knob's color, the bar not showing
+// through it.
+func solid(c ui.Color) ui.Color { return ui.RGB(c.R, c.G, c.B) }
 
 // drawStreak draws what has played, as music plays: a streak of light,
 // brightest at its head, with the smoke of the head and its glow, swelling
@@ -537,7 +636,7 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 	if liquid {
 		bar.Left(glassBarSide).Right(glassBarSide).Bottom(glassBarFoot).Height(glassH).Padding(0, 20, 0, glassBarInset).
 			Radius(glassH/2).Shadow(0, 6, 24, -6, ui.RGBA(0, 0, 0, 0.3)).
-			Material(a.floatGlass(p.dark))
+			Material(a.barMaterial(p.dark))
 	} else {
 		bar.Left(0).Right(0).Bottom(0).Height(playerBarHeight).PaddingX(20)
 	}

@@ -103,7 +103,7 @@ func (a *app) settingsPanel(c *ui.Context) {
 	a.dialog(c, "settings", 0.3, &a.settingsView.open, func(panel ui.Element) {
 		// It grows from the corner of who listens, whose row opens it.
 		panel.Width(min(940, w-48)).Height(max(h-72, 320)).TextColor(ink.text).Label("设置")
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Children(func() {
 			a.scalingBody(c, func() {
 				ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
@@ -128,7 +128,7 @@ func (a *app) globalGlassDialog(c *ui.Context) {
 	a.dialog(c, "confirm-global-glass", 0.25, &sv.confirmGlass, func(panel ui.Element) {
 		ink := a.inkOn(false)
 		panel.Width(410).TextColor(ink.text).Label("全局液态玻璃确认")
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Children(func() {
 			dialogHeader(c, ink, "开启全局液态玻璃？", "", func() { sv.confirmGlass = false })
 			ui.Row(c).PaddingX(28).Gap(8).AlignItems(ui.Start).Children(func() {

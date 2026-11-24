@@ -9,8 +9,11 @@ import (
 	"sync"
 
 	"github.com/mewkiz/flac"
-	"github.com/mewkiz/flac/frame"
 	"github.com/mewkiz/flac/meta"
+
+	// The library's frames, made to decode into the buffers of the frame
+	// before: its own made new ones for every frame.
+	frame "netease-music-mygo/internal/flacframe"
 )
 
 // flacStream decodes a FLAC download for package audio: the lossless and
@@ -26,6 +29,9 @@ type flacStream struct {
 	skip  int64     // frames to drop before it, after a seek
 	pend  []float32 // decoded, and not yet read: stereo
 	buf   []float32 // owns the frame buffer after pend has been consumed
+	// spare are the samples of the frame parsed last, each channel's,
+	// which the next decodes into: decode copies them out at once.
+	spare [][]int32
 	spec  *spectrum
 	drop  func() // lets the download go, as the stream closes
 	once  sync.Once
@@ -108,6 +114,11 @@ func flacDataStartFrom(dl *download, from int64) (int64, error) {
 func (s *flacStream) SampleRate() int { return int(s.info.SampleRate) }
 func (s *flacStream) Channels() int   { return 2 }
 
+// format is the FLAC's rate and bits a sample, as its stream info says.
+func (s *flacStream) format() (rate, bits int) {
+	return int(s.info.SampleRate), int(s.info.BitsPerSample)
+}
+
 func (s *flacStream) Len() int64 {
 	if s.info.NSamples == 0 {
 		return -1
@@ -128,8 +139,13 @@ func (s *flacStream) parse(r io.Reader) (*frame.Frame, error) {
 	if f.SampleRate == 0 {
 		f.SampleRate = s.info.SampleRate
 	}
+	f.Reuse = s.spare
 	if err := f.Parse(); err != nil {
 		return nil, err
+	}
+	s.spare = s.spare[:0]
+	for _, sf := range f.Subframes {
+		s.spare = append(s.spare, sf.Samples)
 	}
 	return f, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"net/http"
 	"os"
@@ -103,8 +104,18 @@ type Player struct {
 	info   *netease.Stream // what the current track streams
 	fade   fader
 	gain   float64 // the current track's normalizing gain
+	// loud is how loud the current track is, if known (loudKnown): from
+	// NetEase, or as the player measured it.
+	loud      loudness
+	loudKnown bool
 	// measureStop stops measuring the loudness of the track, if it is.
-	measureStop   context.CancelFunc
+	measureStop context.CancelFunc
+	// The waveforms measured (waveform.go), by track; the one being
+	// measured, and how to stop it.
+	waves         map[string]*waveform
+	retryExcluded []string
+	waveKey       string
+	waveStop      context.CancelFunc
 	loading       bool
 	playing       bool // what the listener wants: false while paused
 	err           string
@@ -112,7 +123,6 @@ type Player struct {
 	cancelLoad    context.CancelFunc // stops a load that is no longer selected
 	retryTimer    *time.Timer
 	retries       int // reconnections for the current selection
-	retryExcluded []string
 
 	// Crossfade, if set, is how long songs fade into each other as one
 	// ends: 0 for not at all.
@@ -718,13 +728,16 @@ func (p *Player) startGain(gen int, t netease.Track, info *netease.Stream, s str
 		fileKey = loudKey(t, info.Path)
 	}
 	idKey := loudKey(netease.Track{ID: t.ID, ProgramID: t.ProgramID}, "")
+	p.loud, p.loudKnown = loudness{}, false
 	if l, ok := streamLoudness(info); ok {
 		// Kept by the song's id too, for its file once downloaded.
 		p.Loud.put(idKey, l)
+		p.loud, p.loudKnown = l, true
 		return loudGain(l)
 	}
 	for _, k := range []string{fileKey, idKey} {
 		if l, ok := p.Loud.get(k); ok {
+			p.loud, p.loudKnown = l, true
 			return loudGain(l)
 		}
 	}
@@ -778,11 +791,25 @@ func (p *Player) measureLater(gen int, s stream, durationMs int64, keys ...strin
 				return
 			}
 			p.gain = loudGain(l)
+			p.loud, p.loudKnown = l, true
 			if p.Normalize != nil && p.Normalize() {
 				p.fade.glideGain(p.volume*p.volume*p.gain, loudGlide)
 			}
 		})
 	}()
+}
+
+// TrackLoudness returns how loud the track playing is as a whole, its
+// integrated loudness in LUFS, and by how many dB evening out the
+// loudness changes it (0 with it off); false while not known.
+func (p *Player) TrackLoudness() (lufs, gainDB float64, ok bool) {
+	if p.track == nil || !p.loudKnown {
+		return 0, 0, false
+	}
+	if p.Normalize != nil && p.Normalize() && p.gain > 0 {
+		gainDB = 20 * math.Log10(p.gain)
+	}
+	return loudRef - p.loud.Gain, gainDB, true
 }
 
 func (p *Player) Position() time.Duration {
@@ -825,6 +852,19 @@ func (p *Player) stop() {
 	if p.measureStop != nil {
 		p.measureStop()
 		p.measureStop = nil
+	}
+	if p.waveStop != nil {
+		// Half measured, it is measured again if asked for again.
+		p.waveStop()
+		p.waveStop = nil
+		if w := p.waves[p.waveKey]; w != nil {
+			w.mu.Lock()
+			done := w.filled == WaveBuckets
+			w.mu.Unlock()
+			if !done {
+				delete(p.waves, p.waveKey)
+			}
+		}
 	}
 	if p.watchDone != nil {
 		close(p.watchDone)

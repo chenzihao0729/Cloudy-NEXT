@@ -138,7 +138,7 @@ func TestPlayerBarDetailsMenu(t *testing.T) {
 }
 
 // The player bar's details menu takes the theme, as the bar's other menus
-// do; Now Playing's, over its dark stage, stays dark.
+// do, and so does Now Playing's (the user, 1.3.7-test.6).
 func TestPlayerBarDetailsMenuTakesTheTheme(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
@@ -161,8 +161,8 @@ func TestPlayerBarDetailsMenuTakesTheTheme(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.menu.open || !a.menu.onDark {
-		t.Fatalf("Now Playing's menu: open %v, dark %v; want open and dark", a.menu.open, a.menu.onDark)
+	if !a.menu.open || a.menu.onDark {
+		t.Fatalf("Now Playing's menu: open %v, dark %v; want open and light", a.menu.open, a.menu.onDark)
 	}
 }
 

@@ -15,7 +15,7 @@ func (a *app) updateDialog(c *ui.Context) {
 	u := &a.update
 	p, ink := a.pal, a.inkOn(false)
 	a.dialog(c, "update", 0.35, &u.open, func(panel ui.Element) {
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Width(440).TextColor(ink.text)
 		current := ""
 		if v := mygo.App.Version(); v != "" {
@@ -97,6 +97,11 @@ func (a *app) updateNotes(c *ui.Context, up *mygo.Update, ink paneInk) {
 // notesBox shows release notes of version in a box of their own, which
 // scrolls when they run long.
 func (a *app) notesBox(c *ui.Context, version, notes string, ink paneInk) {
+	a.notesBoxSized(c, version, notes, ink, 210, 12.5)
+}
+
+// notesBoxSized is notesBox at most most tall, its lines at size.
+func (a *app) notesBoxSized(c *ui.Context, version, notes string, ink paneInk, most, size float32) {
 	lines := updateNotesLines(notes)
 	// The notes repeat the version in a heading, which the pane says.
 	if len(lines) > 0 && sameVersion(lines[0], version) {
@@ -105,11 +110,11 @@ func (a *app) notesBox(c *ui.Context, version, notes string, ink paneInk) {
 	if len(lines) == 0 {
 		return
 	}
-	height := min(float32(len(lines))*21+28, 210)
+	height := min(float32(len(lines))*(size*1.5+2.25)+28, most)
 	ui.Scroll(c).Height(height).Padding(12, 16).Radius(14).Background(ink.hover).Border(0.5, ink.line).Children(func() {
 		ui.Column(c).Gap(6).Children(func() {
 			for _, line := range lines {
-				ui.Text(c, line).FontSize(12.5).TextColor(ink.muted).LineHeight(1.5)
+				ui.Text(c, line).FontSize(size).TextColor(ink.muted).LineHeight(1.5)
 			}
 		})
 	})

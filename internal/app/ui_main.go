@@ -22,6 +22,8 @@ func (a *app) view(c *ui.Context) {
 		a.pollPersonal(c.Now())
 		c.After(30 * time.Second)
 	}
+	// The desktop asking for opaque surfaces makes the app's own glass solid.
+	a.settings.opaque = a.sysOpaque
 	t := *c.Theme()
 	a.pal = paletteFor(&t)
 	if accent := a.chosenAccent(); accent != "" {
@@ -307,6 +309,9 @@ func (a *app) show(r route) {
 		}
 	}
 	a.pageDir = pageLevel(r) - pageLevel(a.route)
+	// The page left keeps its songs no longer: shownTracks shares the list
+	// the page cache holds, which may go before the next page lists one.
+	a.shownTracks = nil
 	a.route = r
 	if r.page == pageSearch {
 		a.query, a.searched = r.query, r

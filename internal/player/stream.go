@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/audio"
@@ -1177,7 +1178,15 @@ type spectrum struct {
 	accAt  int64     // its first frame
 	edges  [Bands + 1]int
 	fft    []complex128
+	// The analysis (analysis.go): each channel's samples of the chunk
+	// being filled, while it is measured, and its ring, made the first
+	// time it is.
+	accL, accR []float32
+	an         atomic.Pointer[analyzer]
 }
+
+// analyzer returns the analysis's ring, or nil if none was measured.
+func (s *spectrum) analyzer() *analyzer { return s.an.Load() }
 
 func newSpectrum(rate int, _ int64) *spectrum {
 	s := &spectrum{rate: rate, accAt: -1}
@@ -1209,6 +1218,7 @@ func (s *spectrum) feed(at int64, stereo []float32) {
 	if s.accAt < 0 || at != s.accAt+int64(len(s.acc)) {
 		// The start, or a seek: begin a chunk at a chunk's boundary.
 		s.acc = s.acc[:0]
+		s.accL, s.accR = s.accL[:0], s.accR[:0]
 		skip := (fftSize - at%fftSize) % fftSize
 		if int(skip)*2 >= len(stereo) {
 			s.accAt = -1
@@ -1218,12 +1228,26 @@ func (s *spectrum) feed(at int64, stereo []float32) {
 		at += skip
 		s.accAt = at
 	}
+	on := analyzing.Load()
+	if on && s.an.Load() == nil {
+		s.an.Store(newAnalyzer(s.rate))
+	}
 	for i := 0; i+1 < len(stereo); i += 2 {
 		s.acc = append(s.acc, (stereo[i]+stereo[i+1])/2)
+		if on {
+			s.accL = append(s.accL, stereo[i])
+			s.accR = append(s.accR, stereo[i+1])
+		}
 		if len(s.acc) == fftSize {
-			s.analyze(s.accAt / fftSize)
+			chunk := s.accAt / fftSize
+			s.analyze(chunk)
+			// Begun part way into the chunk, it waits for the next.
+			if on && len(s.accL) == fftSize {
+				s.an.Load().analyze(chunk, s.accL, s.accR, &s.window)
+			}
 			s.accAt += fftSize
 			s.acc = s.acc[:0]
+			s.accL, s.accR = s.accL[:0], s.accR[:0]
 		}
 	}
 }

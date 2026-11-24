@@ -131,7 +131,7 @@ func (a *app) downloadDeleteDialog(c *ui.Context) {
 	a.dialog(c, "download-delete", 0.35, &d.open, func(panel ui.Element) {
 		ink := a.inkOn(false)
 		panel.Width(400).TextColor(ink.text)
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Children(func() {
 			body := fmt.Sprintf("确定删除“%s”的本地文件吗？删除后需要重新下载。", d.track.Name)
 			if len(d.items) > 0 {

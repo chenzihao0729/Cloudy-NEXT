@@ -227,7 +227,7 @@ func TestNowPlayingHoldsStillWithoutBadge(t *testing.T) {
 }
 
 // ⌘ and a number choose Now Playing's tab in that place, for a song and
-// for an episode, whose tabs are others: its last is the comments, wherever
+// for an episode, whose tabs are others: its last is the queue, wherever
 // the captions it may have put it.
 func TestCmdNumberChoosesTab(t *testing.T) {
 	for _, c := range []struct {
@@ -235,8 +235,8 @@ func TestCmdNumberChoosesTab(t *testing.T) {
 		keys  []int // from 1, 0 for the last tab
 		panes []int
 	}{
-		{netease.Track{ID: 1, Name: "宝船", Duration: 200000}, []int{4, 2, 1}, []int{paneWall, paneStage, paneLyrics}},
-		{netease.Track{ID: 2, Name: "节目", ProgramID: 9, Duration: 200000}, []int{0, 1}, []int{paneComments, paneProgram}},
+		{netease.Track{ID: 1, Name: "宝船", Duration: 200000}, []int{5, 3, 2, 1}, []int{paneWall, paneAnalysis, paneStage, paneLyrics}},
+		{netease.Track{ID: 2, Name: "节目", ProgramID: 9, Duration: 200000}, []int{0, 1}, []int{paneQueue, paneProgram}},
 	} {
 		a := newTestApp()
 		a.settings = defaultSettings()

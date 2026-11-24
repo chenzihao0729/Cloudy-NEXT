@@ -128,6 +128,9 @@ type backdropCache struct {
 	leaves leafState // the leaves afloat on the pool
 	moved  float64   // how far the drift went at the last step, in seconds
 	last   time.Time
+	// pointer is the pointer as the silk feels it, swell the music.
+	pointer silkPointer
+	swell   silkSwell
 }
 
 // backdrop paints the backdrop behind Now Playing, still or fog.
@@ -149,6 +152,13 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color, opacity float
 			div = 2
 		}
 		cw, ch := int(r.W/div)+1, int(r.H/div)+1
+		if fog && gpu && scene.silk {
+			// The silk's highlights are fine lines, which a smaller canvas,
+			// scaled up, shows in steps as they move: it is painted at the
+			// display's own pixels, which it is light enough for (about a
+			// millisecond at 2560×1600 on an integrated GPU).
+			cw, ch = int(r.W*p.Scale())+1, int(r.H*p.Scale())+1
+		}
 		bd := &a.backdropCache
 		bd.cover = cover
 		if bd.canvas != nil {
@@ -177,8 +187,33 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color, opacity float
 			bd.leaves.step(float32(bd.moved), aspect, bd.drift, &bd.beat.drops)
 			leaves = bd.leaves.uniform(aspect)
 		}
-		bass := bd.level.group(0, 6)
-		due := now.Sub(bd.at) >= backdropFrame-2*time.Millisecond
+		// Every scene takes the music as the silk does, swelling over a half
+		// second and settling over more: the low end as it is leapt at each
+		// kick, and the bokeh, brighter by half with it, flashed in one frame
+		// (the user's recording, 1.3.7-test.6).
+		bd.swell.step(now, bd.level.group(0, 6), bd.level.group(16, player.Bands))
+		bass := bd.swell.bass
+		frame := backdropFrame
+		var silk *silkInput
+		if fog && scene.silk {
+			silk = &silkInput{bass: bd.swell.bass, high: bd.swell.high}
+			if art != nil {
+				silk.palette = art.palette
+			}
+			if moving {
+				stirred := a.silkStir(&bd.pointer, now, r)
+				silk.pointer = &bd.pointer
+				if stirred {
+					// Following the pointer, at the display's pace, as
+					// anything the hand moves.
+					frame, moved = silkFrame, true
+				} else if !moved && bd.pointer.in {
+					// Still: the silk waits for the pointer to move.
+					p.After(silkWatch)
+				}
+			}
+		}
+		due := now.Sub(bd.at) >= frame-2*time.Millisecond
 		if bd.canvas == nil || bd.art != art || bd.tint != tint || bd.fog != fog || bd.style != style || moved && due {
 			if bd.canvas == nil {
 				bd.canvas = ui.NewCanvas(cw, ch)
@@ -187,7 +222,7 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color, opacity float
 			bd.canvas.Draw(p, func(cp *ui.Painter) {
 				box := ui.Rect{W: float32(cw), H: float32(ch)}
 				if fog {
-					drawSceneDrops(cp, box, style, tint, float32(bd.drift), bass, drops, leaves)
+					drawSceneDrops(cp, box, style, tint, float32(bd.drift), bass, drops, leaves, silk)
 				} else {
 					drawBackdrop(cp, box, art, tint)
 				}
@@ -209,9 +244,54 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color, opacity float
 			drawSceneOver(p, r, style, tint, float32(bd.drift), bass, opacity, drops, leaves)
 		}
 		if moved {
-			p.After(backdropFrame)
+			p.After(frame)
 		}
 	})
+}
+
+// silkFrame is how often the silk is painted while the pointer stirs it,
+// and silkWatch how often, lying still with the pointer over it, it looks
+// whether the pointer has moved.
+const (
+	silkFrame = time.Second / 60
+	silkWatch = time.Second / 8
+)
+
+// silkStir moves sp, the pointer as the silk feels it, on to now, the
+// silk filling r, and reports whether it stirs the silk still.
+func (a *app) silkStir(sp *silkPointer, now time.Time, r ui.Rect) bool {
+	dt := float32(now.Sub(sp.last).Seconds())
+	if sp.last.IsZero() || dt > 0.2 {
+		dt = 1.0 / 60
+	}
+	sp.last = now
+	x, y, in := silkPointerAt(a, r)
+	sp.aim(x, y, in)
+	sp.step(dt)
+	return sp.stirring()
+}
+
+// silkPointerAt returns where the pointer is over r, the silk, as the
+// silk's shader takes it, and whether it is over the window at all.
+// The pointer is asked of the screen, not of the view, which is built
+// again whenever an element following the pointer sees it move: it is
+// asked only as the silk is painted.
+var silkPointerAt = func(a *app, r ui.Rect) (x, y float32, in bool) {
+	if a.win == nil || r.W <= 0 || r.H <= 0 {
+		return 0, 0, false
+	}
+	cb := a.win.ContentBounds()
+	if cb.Width <= 0 || cb.Height <= 0 {
+		return 0, 0, false
+	}
+	at := npCursor()
+	fx := float32(at.X-cb.X) / float32(cb.Width)
+	fy := float32(at.Y-cb.Y) / float32(cb.Height)
+	if fx < 0 || fx > 1 || fy < 0 || fy > 1 {
+		return 0, 0, false
+	}
+	// The silk fills the window: shares of it are shares of r.
+	return (fx*r.W - r.W/2) / r.H, (r.H/2 - fy*r.H) / r.H, true
 }
 
 // step moves the drift and the pulse on to now, and reports whether

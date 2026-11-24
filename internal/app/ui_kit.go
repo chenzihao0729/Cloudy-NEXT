@@ -347,7 +347,7 @@ func (a *app) segmentedControl(c *ui.Context, selected *int, labels []string, ac
 	}
 	// Full motion, or full as it was chosen in this very control: the
 	// slide away from it still lifts.
-	liquid := !a.settings.PowerSaver && (a.motion == motionFull || time.Since(a.mk.fullAt) < 800*time.Millisecond)
+	liquid := !a.settings.PowerSaver && !a.settings.opaque && (a.motion == motionFull || time.Since(a.mk.fullAt) < 800*time.Millisecond)
 	if a.motion == motionFull {
 		a.mk.fullAt = time.Now()
 	}

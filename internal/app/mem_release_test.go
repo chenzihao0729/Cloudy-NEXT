@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
@@ -210,6 +212,48 @@ func TestReleaseHiddenTrimsArt(t *testing.T) {
 	}
 	if !a.mem.pending || a.mem.worth != 0 {
 		t.Fatal("hiding asked for no release")
+	}
+}
+
+// Covers let go of used to stay in gone until the cache went over its
+// limit again, which browsing for hours never did.
+func TestArtCacheSweepsGone(t *testing.T) {
+	now := time.Unix(1000, 0)
+	c := newArtCache(func(func()) {})
+	c.now = func() time.Time { return now }
+	c.limit = 0 // every cover put in pushes the last one out
+	for i := range 64 {
+		c.add(fmt.Sprint(i), &artwork{size: 1, used: now})
+	}
+	runtime.GC()
+	runtime.GC()
+	c.sweepGone()
+	if n := len(c.gone); n != 0 {
+		t.Fatalf("%d covers let go of kept after the sweep", n)
+	}
+	// And add sweeps by itself, now and then.
+	c2 := newArtCache(func(func()) {})
+	c2.now = func() time.Time { return now }
+	c2.limit = 0
+	for i := range 31 {
+		c2.add(fmt.Sprint(i), &artwork{size: 1, used: now})
+	}
+	runtime.GC()
+	runtime.GC()
+	c2.add("sweep", &artwork{size: 1, used: now}) // the 32nd: sweeps first
+	if n := len(c2.gone); n > 1 {
+		t.Fatalf("%d covers let go of kept, want the sweep to have dropped them", n)
+	}
+}
+
+// A page left kept its songs alive through shownTracks, which shares the
+// list the page cache holds.
+func TestPageChangeDropsShownTracks(t *testing.T) {
+	a := newTestApp()
+	a.shownTracks = []netease.Track{{ID: 1, Name: "song"}}
+	a.open(route{page: pageRecent})
+	if a.shownTracks != nil {
+		t.Fatal("the page left kept its songs")
 	}
 }
 

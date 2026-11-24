@@ -43,6 +43,7 @@ func commentable(tr *netease.Track) bool {
 // commentComposer is the field to write a comment in, over the comments,
 // with its button to send it. Signed out, it asks the listener to sign in.
 func (a *app) commentComposer(c *ui.Context, tr *netease.Track) {
+	ink := a.cmInk()
 	d := &a.more.draft
 	if d.track != tr.ID {
 		*d = commentDraft{track: tr.ID}
@@ -53,11 +54,11 @@ func (a *app) commentComposer(c *ui.Context, tr *netease.Track) {
 	n := utf8.RuneCountInString(d.text)
 	over := n > commentLimit
 	ui.Row(c.Key("compose")).Margin(4, 8, 6, 12).Padding(4, 4, 4, 16).Gap(8).Radius(999).AlignItems(ui.Center).
-		Background(white.Alpha(0.08)).Border(1, white.Alpha(0.1)).Children(func() {
+		Background(ink.Alpha(0.08)).Border(1, ink.Alpha(0.1)).Children(func() {
 		if a.profile == nil {
 			b := ui.ButtonBase(c.Key("compose-login")).Grow(1).Height(32).AlignItems(ui.Center).FocusRing(false).Label("登录后发表评论")
 			b.Children(func() {
-				ui.Text(c, "登录后发表评论，评论会同步到网易云音乐").FontSize(13).TextColor(white.Alpha(0.5))
+				ui.Text(c, "登录后发表评论，评论会同步到网易云音乐").FontSize(13).TextColor(ink.Alpha(0.5))
 			})
 			if b.Clicked() {
 				a.openLogin()
@@ -65,16 +66,16 @@ func (a *app) commentComposer(c *ui.Context, tr *netease.Track) {
 			return
 		}
 		in := ui.TextInputBase(c.Key("compose-input"), &d.text).Bind(&d.box).Grow(1).MinWidth(0).
-			Placeholder("说点什么，评论会同步到网易云音乐").FontSize(13.5).TextColor(white).Label("发表评论")
+			Placeholder("说点什么，评论会同步到网易云音乐").FontSize(13.5).TextColor(ink).Label("发表评论")
 		if n > 0 {
-			fg := white.Alpha(0.4)
+			fg := ink.Alpha(0.4)
 			if over {
 				fg = a.pal.accent
 			}
 			ui.Text(c, fmt.Sprintf("%d/%d", n, commentLimit)).FontSize(11).FontFeatures("tnum").TextColor(fg)
 		}
 		ready := n > 0 && !over && !d.sending
-		bg := white.Alpha(0.1)
+		bg := ink.Alpha(0.1)
 		if ready {
 			bg = a.pal.accent
 		}
@@ -85,7 +86,11 @@ func (a *app) commentComposer(c *ui.Context, tr *netease.Track) {
 			if d.sending {
 				label = "发送中…"
 			}
-			ui.Text(c, label).FontSize(13).FontWeight(600).TextColor(white.Alpha(0.55 + 0.45*b2f(ready)))
+			fg := ink.Alpha(0.55)
+			if ready {
+				fg = white // on the accent
+			}
+			ui.Text(c, label).FontSize(13).FontWeight(600).TextColor(fg)
 		})
 		if (send.Clicked() || in.Submitted()) && ready {
 			a.sendComment(tr)
@@ -147,6 +152,7 @@ func commentFailure(err error) string {
 // commentDelete is the button on a comment of the listener's own that
 // deletes it: a first click asks, a second within a few seconds deletes.
 func (a *app) commentDelete(c *ui.Context, cm *netease.Comment) {
+	ink := a.cmInk()
 	if a.profile == nil || cm.User.ID != a.profile.UserID || cm.ID == 0 {
 		return
 	}
@@ -156,13 +162,13 @@ func (a *app) commentDelete(c *ui.Context, cm *netease.Comment) {
 	if armed {
 		c.After(d.armedTill.Sub(now))
 	}
-	label, fg := "删除", white.Alpha(0.42)
+	label, fg := "删除", ink.Alpha(0.42)
 	if armed {
 		label, fg = "确认删除", a.pal.accent
 	}
 	b := ui.ButtonBase(c.Key("delete")).Padding(3, 6).Margin(-3, 0).Radius(999).FocusRing(false).Label(label + "评论")
 	if b.Hovered() && !armed {
-		fg = white.Alpha(0.8)
+		fg = ink.Alpha(0.8)
 	}
 	b.Children(func() { ui.Text(c, label).FontSize(12).TextColor(fg) })
 	if b.Clicked() {
@@ -207,8 +213,8 @@ func (a *app) removeComment(id int64) {
 }
 
 // commentCountButton is a speech bubble with how many comments the song
-// has, by its heart in Now Playing: a click opens the comments, and
-// another goes back to the lyrics.
+// has, by its heart in Now Playing: a click brings the comments out in
+// their drawer, at the right, and another puts them away.
 func (a *app) commentCountButton(c *ui.Context, tr *netease.Track, size float32, color ui.Color) ui.Element {
 	if !commentable(tr) {
 		return ui.Box(c)
@@ -219,17 +225,13 @@ func (a *app) commentCountButton(c *ui.Context, tr *netease.Track, size float32,
 	}
 	wrap := ui.Box(c).Width(countSlot(size, true)).Height(size + 16).AlignItems(ui.Start)
 	wrap.Children(func() {
-		on := a.npPane == paneComments
+		on := a.npComments
 		tint := color
 		if on {
 			tint = white
 		}
 		if commentIcon(c, size, tint, n > 0).Clicked() {
-			if on {
-				a.npPane = a.lyricsPaneChosen()
-			} else {
-				a.npPane = paneComments
-			}
+			a.npComments = !on
 		}
 		if n > 0 {
 			notchCount(c.Key("comment-count"), commentBadge(n), size, tint)
@@ -255,7 +257,7 @@ func commentBadge(n int) string {
 }
 
 // barCommentButton is commentCountButton in the player bar, by the heart:
-// a click opens Now Playing on the comments.
+// a click opens Now Playing with the comments out.
 // Without counted, the count is only in its tooltip.
 func (a *app) barCommentButton(c *ui.Context, tr *netease.Track, size float32, color ui.Color, counted bool) ui.Element {
 	if !commentable(tr) {
@@ -277,7 +279,7 @@ func (a *app) barCommentButton(c *ui.Context, tr *netease.Track, size float32, c
 			button.Tooltip(fmt.Sprintf("%d 条评论", n))
 		}
 		if button.Clicked() {
-			a.npPane = paneComments
+			a.npComments = true
 			a.nowPlaying = true
 		}
 		if shown > 0 {

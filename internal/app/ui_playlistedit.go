@@ -443,7 +443,7 @@ func (a *app) playlistNameDialog(c *ui.Context) {
 	p := a.pal
 	d := &a.naming
 	a.dialog(c, "playlist-name", 0.35, &d.open, func(panel ui.Element) {
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Width(400).TextColor(a.inkOn(false).text)
 		title, action := "新建歌单", "创建"
 		if d.rename != 0 {
@@ -476,7 +476,7 @@ func (a *app) playlistNameDialog(c *ui.Context) {
 func (a *app) deletePlaylistDialog(c *ui.Context) {
 	d := &a.deleting
 	a.dialog(c, "playlist-delete", 0.35, &d.open, func(panel ui.Element) {
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		ink := a.inkOn(false)
 		panel.Width(400).TextColor(ink.text)
 		dialogHeader(c, ink, "删除歌单", "确定删除歌单“"+d.name+"”吗？删除后无法恢复。", func() { d.open = false })

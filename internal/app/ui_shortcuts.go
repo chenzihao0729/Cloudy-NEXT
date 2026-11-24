@@ -80,7 +80,7 @@ func (a *app) shortcutEditorDialog(c *ui.Context) {
 	w, h := c.Size()
 	a.dialog(c, "shortcut-editor", 0.35, &s.open, func(panel ui.Element) {
 		panel.Width(min(640, w-80)).MaxHeight(min(720, h-56)).TextColor(ink.text)
-		a.pane(panel, 26, false)
+		a.dialogPane(panel, 26, false)
 		panel.Children(func() {
 			capture := ui.Box(c.Key("shortcut-capture")).Size(1, 1).Focusable().Bind(&s.capture).AutoFocus()
 			capture.HandleInput(func(ev ui.InputEvent) bool { return a.recordShortcut(ev) })

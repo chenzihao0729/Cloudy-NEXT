@@ -181,7 +181,7 @@ func TestPlayerBarCompactActions(t *testing.T) {
 	if err := tt.Click("评论"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.nowPlaying || a.npPane != paneComments {
+	if !a.nowPlaying || !a.npComments {
 		t.Fatal("comment button no longer opens comments")
 	}
 }

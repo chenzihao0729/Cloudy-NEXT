@@ -218,6 +218,10 @@ func (s *dsdStream) SampleRate() int { return s.outRate }
 func (s *dsdStream) Channels() int   { return 2 }
 func (s *dsdStream) Len() int64      { return s.frames }
 
+// format is the rate of a channel's bits, 2.8224 MHz for DSD64, and one
+// bit a sample.
+func (s *dsdStream) format() (rate, bits int) { return s.outRate * s.step * 8, 1 }
+
 // seekBytes reads on from byte at of each channel, the window filled with
 // silence before it: DSD's silence is ones and zeros by turns.
 func (s *dsdStream) seekBytes(at int64) {

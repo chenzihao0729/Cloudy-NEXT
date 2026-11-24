@@ -8,7 +8,8 @@ import (
 )
 
 // The first launch after an update says what it brought, once; a first
-// install says nothing. The cover backgrounds are said once, on an update.
+// install says nothing. The cover backgrounds are said once, on an update,
+// and so are the liquid glass to try and the analysis pane.
 func TestNoteVersion(t *testing.T) {
 	fetched := make(chan string, 1)
 	real := fetchReleaseNotes
@@ -36,11 +37,11 @@ func TestNoteVersion(t *testing.T) {
 	a.settings.UpdateNotes = &updateNotes{Version: "v1.2.10", Notes: "- 圆弧歌词"}
 	a.noteVersion("1.2.10")
 	w := a.whatsNew
-	if !w.open || w.notes != "- 圆弧歌词" || !w.cover || w.loading {
+	if !w.open || w.notes != "- 圆弧歌词" || !w.cover || !w.try || w.loading {
 		t.Fatalf("the first launch after an update: %+v", w)
 	}
 	saved := loadSettingsFrom(a.settings.path)
-	if saved.LastVersion != "1.2.10" || saved.UpdateNotes != nil || !saved.CoverNoticed {
+	if saved.LastVersion != "1.2.10" || saved.UpdateNotes != nil || !saved.CoverNoticed || !saved.TryNoticed {
 		t.Fatalf("saved: last %q, notes %+v, noticed %v", saved.LastVersion, saved.UpdateNotes, saved.CoverNoticed)
 	}
 	a.whatsNew.open = false
@@ -52,7 +53,7 @@ func TestNoteVersion(t *testing.T) {
 	// An update installed by hand: the notes come from GitHub, and the
 	// cover backgrounds were said already.
 	a.noteVersion("1.2.11")
-	if !a.whatsNew.open || a.whatsNew.cover || !a.whatsNew.loading {
+	if !a.whatsNew.open || a.whatsNew.cover || a.whatsNew.try || !a.whatsNew.loading {
 		t.Fatalf("an update installed by hand: %+v", a.whatsNew)
 	}
 	select {
