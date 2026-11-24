@@ -10,7 +10,8 @@
     { "ext": ["flac"], "name": "FLAC 音频", "mimeType": "audio/flac", "role": "Viewer" }
   ],
   "updates": {
-    "publicKey": "F3Su/2E+0t0xrBajRl0Ial0MP4+CxMihdafm/ujNAZg=",
+    "publicKey": "POUQn0/6GhhucsSS9a986xzpw8aX/sK00kbmP1UMK1Q=",
+    "privateKey": "~/.cloudy-next/update-keys/mygo-update.key",
     "github": "chenzihao0729/Cloudy-NEXT",
     "deltas": 0
   },
