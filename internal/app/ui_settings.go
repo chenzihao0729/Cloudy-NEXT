@@ -9,6 +9,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/netease"
 )
 
 type settingsCategory int
@@ -81,6 +83,8 @@ func (a *app) openSettingsAt(category settingsCategory) {
 // changed applies the settings everywhere and keeps them.
 func (a *app) changed() {
 	a.settings.save()
+	// Every window, the floating ones too, from their next frame.
+	ui.SetIgnoreReduceMotion(a.settings.IgnoreSystemMotion)
 	if a.win != nil {
 		// The theme source reaches the app's loop, which a view built in a
 		// test has none of.
@@ -1133,6 +1137,15 @@ func (a *app) settingsAboutPage(c *ui.Context, k *settingsKit) {
 			})
 		})
 	}
+	k.group(c, "诊断", func() {
+		k.row(c, "诊断日志", "记录网易云请求和登录过程，不含 Cookie 原文，用于排查问题", func() {
+			if k.button(c, "diag-log", "在文件夹中显示", iconFolder, false, false).Clicked() {
+				if path := netease.DiagLogPath(); path != "" {
+					mygo.Shell.ShowItemInFolder(path)
+				}
+			}
+		})
+	})
 }
 
 // settingSlider is a slider of a setting, from 0 to 1, with how far it is

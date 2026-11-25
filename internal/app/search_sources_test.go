@@ -230,10 +230,11 @@ func TestProviderSearchRowPlays(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	a.pl.Cue([]netease.Track{{ID: 71, Name: "Queued first"}, {ID: 72, Name: "Queued next"}})
 	if err := tt.Click(track.Name); err != nil {
 		t.Fatal(err)
 	}
-	if a.pl.Current() != nil {
+	if a.pl.Current() == nil || a.pl.Current().ID != 71 {
 		t.Fatal("single click played song")
 	}
 	if err := tt.Click(track.Name); err != nil {
@@ -241,6 +242,13 @@ func TestProviderSearchRowPlays(t *testing.T) {
 	}
 	if current := a.pl.Current(); current == nil || current.Source == nil || current.Source.ID != "qq-mid" {
 		t.Fatal("double click lost provider song")
+	}
+	// Merging upstream search insertion must keep double-click playback
+	// and the existing queue, including provider identities.
+	queue := a.pl.Queue()
+	order, _ := a.pl.PlayOrder()
+	if len(queue) != 3 || len(order) != 3 || queue[order[0]].ID != 71 || queue[order[1]].ID != track.ID || queue[order[2]].ID != 72 {
+		t.Fatal("search insertion replaced or reordered the existing queue")
 	}
 	if len(a.playlistActions(&track, 0)) != 0 {
 		t.Fatal("external song exposes NetEase playlist action")

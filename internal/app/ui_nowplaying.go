@@ -375,7 +375,13 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 					}
 					_, title := a.marqueeLine(c, "np-title", tr.Name, titleSize, 700, -0.3)
 					a.npSpot.title = title.LayoutBounds()
-					a.flown(title)
+					// Match fly-title's grayscale glyph coverage so landing on Windows
+					// does not snap from grayscale AA to ClearType RGB subpixel fringes
+					// after the opening motion finishes.
+					title.Translate(-1e-4, 0)
+					if a.npTitleFlying() {
+						title.Opacity(0)
+					}
 					a.artistLinks(c, tr, white.Alpha(0.6), white, true).FontSize(15).SingleLine()
 				}
 				actions := func(size float32) {
@@ -1024,10 +1030,10 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		}
 	})
 	box := scroll.LayoutBounds()
-	focus := lyricFocus{}
-	if st.focusY > 0 {
-		focus = lyricFocus{st.focusY, box.W, box.H, st.size, st.tilt, a.lyricFamily(), a.settings.LyricTrans}
-	}
+	// The regular view too: the comments drawer narrows and widens the
+	// pane, the lines wrap again, and the offset kept would show lines not
+	// sung yet until the next one came (#56).
+	focus := lyricFocus{st.focusY, box.W, box.H, st.size, st.tilt, a.lyricFamily(), a.settings.LyricTrans}
 	// Wait for layout to take the new padding or type size before measuring the target.
 	if focus != a.lyricGlide.focus {
 		a.lyricGlide.focus = focus

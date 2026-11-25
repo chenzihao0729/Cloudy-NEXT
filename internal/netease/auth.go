@@ -77,6 +77,7 @@ func init() {
 func RestoreSession() bool {
 	b, err := readSession()
 	if err != nil || len(b) == 0 {
+		diagf("restore session: none (%v)", err)
 		return false
 	}
 	var cookies []*http.Cookie
@@ -87,6 +88,7 @@ func RestoreSession() bool {
 		}
 	}
 	httpClient.Jar.SetCookies(siteURL, cookies)
+	diagf("restore session: kept %s, jar %s", diagCookies(cookies), diagSession())
 	return true
 }
 
@@ -99,13 +101,17 @@ func SaveSession() error {
 		}
 	}
 	if len(parts) == 0 {
+		diagf("save session: no session cookie")
 		return errors.New("no session cookie")
 	}
-	return writeSession([]byte(strings.Join(parts, "; ")))
+	err := writeSession([]byte(strings.Join(parts, "; ")))
+	diagf("save session: %s, error %v", diagSession(), err)
+	return err
 }
 
 // ClearSession forgets the session, here and in the keychain.
 func ClearSession() {
+	diagf("clear session: was %s", diagSession())
 	httpClient.Jar.SetCookies(siteURL, []*http.Cookie{
 		{Name: "MUSIC_U", Path: "/", MaxAge: -1},
 		{Name: "__csrf", Path: "/", MaxAge: -1},
@@ -186,6 +192,9 @@ func Account() (*Profile, error) {
 		Profile *Profile `json:"profile"`
 	}
 	err := get("/api/nuser/account/get", nil, &res)
+	if err == nil && res.Profile == nil {
+		diagf("account: NetEase knows no one by this session")
+	}
 	return res.Profile, err
 }
 
@@ -196,6 +205,7 @@ func QRKey() (string, error) {
 		Code   int    `json:"code"`
 		Unikey string `json:"unikey"`
 	}
+	diagf("qr login: start, jar %s", diagSession())
 	if err := eapiPost("/api/login/qrcode/unikey", map[string]any{"type": 3}, &res); err != nil {
 		return "", err
 	}
@@ -231,6 +241,7 @@ func QRCheck(key string) (code int, msg, nickname, avatar string, err error) {
 
 // Logout ends the session with NetEase too.
 func Logout() {
+	diagf("sign out")
 	post("/api/logout", url.Values{}, &struct{}{})
 	ClearSession()
 }
