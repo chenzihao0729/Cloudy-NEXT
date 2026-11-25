@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	_ "embed"
 	"image"
 	"log"
 	"sync"
@@ -18,9 +17,6 @@ const (
 	appProject = "https://github.com/chenzihao0729/Cloudy-NEXT"
 )
 
-//go:embed brand/mascot.png
-var mascotPNG []byte
-
 func embeddedBitmap(b []byte) func() *ui.Bitmap {
 	return sync.OnceValue(func() *ui.Bitmap {
 		img, _, err := image.Decode(bytes.NewReader(b))
@@ -33,14 +29,13 @@ func embeddedBitmap(b []byte) func() *ui.Bitmap {
 }
 
 var (
-	mascot    = embeddedBitmap(mascotPNG)
 	appIcon   = embeddedBitmap(resources.Icon)
 	brandIcon = appIcon
 	roundIcon = embeddedBitmap(resources.RoundIcon)
 	splashArt = sync.OnceValue(func() *ui.Bitmap {
 		src, _, err := image.Decode(bytes.NewReader(resources.RoundIcon))
 		if err != nil {
-			return mascot()
+			return roundIcon()
 		}
 		// The splash only needs a small image. Downsample once so every
 		// rotating frame stays cheap even when the source icon is large.
@@ -56,7 +51,7 @@ func splashIcon() *ui.Bitmap {
 }
 
 func mascotView(c *ui.Context, size float32) ui.Element {
-	return ui.Image(c, mascot()).Size(size, size).Fit(ui.Cover)
+	return ui.Image(c, roundIcon()).Size(size, size).Fit(ui.Cover)
 }
 
 func (a *app) aboutCard(c *ui.Context, k *settingsKit) {

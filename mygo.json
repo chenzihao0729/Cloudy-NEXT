@@ -16,7 +16,6 @@
     "deltas": 0
   },
   "macos": {
-    "icon": "icon/AppIcon.icon",
     "minimumSystemVersion": "13.0"
   },
   "linux": {
