@@ -256,6 +256,15 @@ type settings struct {
 	// CacheFolder is the folder the songs played are kept in, in a folder of
 	// their own; empty for the app's cache directory.
 	CacheFolder string `json:"cacheFolder,omitempty"`
+	// OtherCacheMB is how many megabytes the pictures kept on disk may
+	// take, the covers and avatars (art_disk.go), apart from the songs'.
+	OtherCacheMB int `json:"otherCacheMB"`
+	// SideOrder is the order of the sidebar's entries and groups, by
+	// sideItem id; SideHidden those it does not show, and SideFolded the
+	// groups that start folded (side_custom.go).
+	SideOrder  []string `json:"sideOrder,omitempty"`
+	SideHidden []string `json:"sideHidden,omitempty"`
+	SideFolded []string `json:"sideFolded,omitempty"`
 	// LocalFolders are the folders of the listener's own music, which the
 	// 本地音乐 page lists and watches.
 	LocalFolders []string `json:"localFolders,omitempty"`
@@ -314,6 +323,7 @@ func defaultSettings() settings {
 	s := baseSettings()
 	s.TaskbarProgress = true
 	s.DeskTrans, s.DeskNext = true, true
+	s.OtherCacheMB = 200
 	return s
 }
 

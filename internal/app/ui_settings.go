@@ -67,6 +67,7 @@ var dangerColor = ui.Hex("#e5484d")
 func (a *app) openSettings() {
 	a.closePrivateMessages()
 	a.measureCache()
+	a.measureOtherCache()
 	a.dl.pathDraft = a.downloadFolder()
 	a.settingsView.query = ""
 	a.settingsView.open = true
@@ -968,13 +969,29 @@ func (a *app) settingsStoragePage(c *ui.Context, k *settingsKit) {
 			}
 		})
 		if canRegisterOpenWith {
+			if a.openWithOn == nil {
+				on := openWithRegistered()
+				a.openWithOn = &on
+			}
 			k.row(c, "用 Cloudy-NEXT 打开音乐文件", "加入 MP3、FLAC 的「打开方式」；要设为默认播放器，请在系统的默认应用设置里选择 Cloudy-NEXT", func() {
-				if k.button(c, "open-with", "添加到打开方式", nil, false, false).Clicked() {
+				if *a.openWithOn {
+					if k.button(c, "open-with-remove", "从打开方式移除", nil, false, false).Clicked() {
+						if err := unregisterOpenWith(); err != nil {
+							a.toast = "移除失败：" + err.Error()
+						} else {
+							a.toast = "已移除；如果 Cloudy-NEXT 是默认播放器，请在系统的默认应用设置里换一个"
+						}
+						on := openWithRegistered()
+						a.openWithOn = &on
+					}
+				} else if k.button(c, "open-with", "添加到打开方式", nil, false, false).Clicked() {
 					if err := registerOpenWith(); err != nil {
 						a.toast = "添加失败：" + err.Error()
 					} else {
 						a.toast = "已添加：在音乐文件上右键「打开方式」就能选择 Cloudy-NEXT"
 					}
+					on := openWithRegistered()
+					a.openWithOn = &on
 				}
 				if k.button(c, "default-apps", "默认应用设置", iconExternal, false, false).Clicked() {
 					mygo.Shell.OpenExternal("ms-settings:defaultapps")
@@ -998,6 +1015,23 @@ func (a *app) settingsStoragePage(c *ui.Context, k *settingsKit) {
 				a.applyCacheLimit()
 			})
 		})
+		if a.art.disk != nil {
+			k.stateRow(c, "其他缓存", "专辑封面、头像等图片保存在本机，翻页和下次启动时不用重新下载；"+usage(a.otherUsed), func() {
+				labels := make([]string, len(otherCacheLimits))
+				chosen := otherCacheLimits[2].label
+				for i, l := range otherCacheLimits {
+					labels[i] = l.label
+					if l.mb == s.OtherCacheMB {
+						chosen = l.label
+					}
+				}
+				k.choose(c, "other-cache", "其他缓存", chosen, labels, func(i int) {
+					s.OtherCacheMB = otherCacheLimits[i].mb
+					a.changed()
+					a.applyOtherCacheLimit()
+				})
+			})
+		}
 		where := songCacheDir(s.CacheFolder)
 		k.block(c, "缓存位置 缓存文件夹 路径 "+where, func() {
 			line := ink.line
@@ -1009,7 +1043,7 @@ func (a *app) settingsStoragePage(c *ui.Context, k *settingsKit) {
 					ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
 						ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 							ui.Text(c, "缓存位置").FontSize(14).FontWeight(500)
-							infoTip(c, "系统盘空间不够时，可以把缓存放到别的磁盘；更换后原来的缓存会被清除", ink)
+							infoTip(c, "系统盘空间不够时，可以把缓存放到别的磁盘；歌曲缓存和其他缓存一起移过去，原来的缓存会被清除", ink)
 						})
 						ui.Text(c, where).FontSize(12).Font("Cascadia Mono, Consolas, monospace").TextColor(ink.muted).SingleLine()
 					})
@@ -1024,11 +1058,18 @@ func (a *app) settingsStoragePage(c *ui.Context, k *settingsKit) {
 					}
 				})
 		})
-		k.row(c, "清除缓存", "删除保存在本机的全部缓存歌曲，下载的歌曲不受影响", func() {
+		k.row(c, "清除歌曲缓存", "删除保存在本机的全部缓存歌曲，下载的歌曲不受影响", func() {
 			if k.button(c, "clear-cache", "清除", nil, a.cacheUsed <= 0, true).Clicked() {
 				a.clearCache()
 			}
 		})
+		if a.art.disk != nil {
+			k.row(c, "清除其他缓存", "删除保存在本机的封面和头像图片，用到时会重新下载", func() {
+				if k.button(c, "clear-other-cache", "清除", nil, a.otherUsed <= 0, true).Clicked() {
+					a.clearOtherCache()
+				}
+			})
+		}
 	})
 }
 

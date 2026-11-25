@@ -134,6 +134,10 @@ func Read(path string) (*Song, error) {
 		readDSF(f, info.Size(), s)
 	case ".dff":
 		readDFF(f, info.Size(), s)
+	case ".aif", ".aiff", ".aifc":
+		readAIFF(f, info.Size(), s)
+	case ".wma":
+		readWMA(f, info.Size(), s)
 	default:
 		return nil, fmt.Errorf("local: %s is not a song the player plays", path)
 	}

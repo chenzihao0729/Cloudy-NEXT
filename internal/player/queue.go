@@ -168,3 +168,20 @@ func (p *Player) Clear() {
 	p.cover, p.coverOf = nil, 0
 	p.sync()
 }
+
+// SetPrivileges gives the queued songs whose IDs by has the privileges it
+// has for them: what the listener may play changes with their membership,
+// and a queue kept from an earlier run says what was so then.
+func (p *Player) SetPrivileges(by map[int64]netease.Privilege) {
+	set := func(t *netease.Track) {
+		if pr, ok := by[t.ID]; ok && t.ID > 0 && t.ProgramID == 0 {
+			t.Privilege = &pr
+		}
+	}
+	for i := range p.queue {
+		set(&p.queue[i])
+	}
+	if p.track != nil {
+		set(p.track)
+	}
+}

@@ -492,6 +492,7 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist,
 		if b.Clicked() {
 			*collapsed = !*collapsed
 		}
+		a.contextMenu(b, false, func() [][]menuAction { return a.sideMenu(title) }, nil)
 		b.Expanded(!*collapsed)
 		if b.Hovered() {
 			b.Background(p.hover)

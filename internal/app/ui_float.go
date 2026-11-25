@@ -2,7 +2,6 @@ package app
 
 import (
 	"math"
-	"strings"
 	"time"
 	"unicode"
 
@@ -101,7 +100,7 @@ func (a *app) applyDeskLyrics() {
 		w, h := a.deskSize()
 		a.desk.vertical = s.DeskVertical
 		// What the window lays out, the characters fly to: none yet.
-		a.deskStood, a.deskLineAt = nil, ui.Rect{}
+		a.deskStood, a.deskLineAt, a.desk.bodyAt = nil, ui.Rect{}, ui.Rect{}
 		a.deskWin = a.floatWindow(" 桌面歌词", x, y, w, h, a.deskView, func() {
 			s.DeskLyrics = false
 			a.applyDeskLyrics()
@@ -127,8 +126,11 @@ func (a *app) applyDeskLyrics() {
 	if a.deskWin == nil {
 		return
 	}
-	a.desk.hot = false
+	a.desk.through = false
 	a.deskWin.SetIgnoreMouseEvents(s.DeskLyrics && s.DeskLock)
+	if !s.DeskLyrics || !s.DeskLock {
+		a.showDeskUnlock(false) // unlocked, at once rather than on the clock
+	}
 	if s.DeskLyrics && (a.desk.covered || a.desk.idle) && a.deskFly.win == nil {
 		// A game or a video is full screen in front, or nothing plays and
 		// they are to hide then: out of the way until that ends.
@@ -140,10 +142,16 @@ func (a *app) applyDeskLyrics() {
 			// Out of the button: the window comes in as the lyrics land.
 			a.deskWin.SetOpacity(0)
 		}
+		shown := a.deskWin.IsVisible()
 		a.deskWin.Show()
-		// A flyout shows by its anchor: from there, where it was left, and
-		// above all, which it isn't by itself once another app comes up.
-		a.placeDesk(a.deskSpot(s.DeskX, s.DeskY))
+		if !shown {
+			// A flyout shows by its anchor: from there, where it was left.
+			// Showing already, it stays where it is: locked or unlocked, it
+			// was put back on the screen whole, which moved lyrics left by
+			// its edge, their window's clear part past it (1.3.9).
+			a.placeDesk(a.deskSpot(s.DeskX, s.DeskY))
+		}
+		// Above all, which it isn't by itself once another app comes up.
 		a.deskWin.SetAlwaysOnTop(true)
 	} else {
 		a.stopDeskWatch()
@@ -178,7 +186,7 @@ func (a *app) fitDeskSize() {
 		// A flyout made another size goes back by its anchor, the tray's
 		// icon: put where it was, kept on its screen.
 		a.deskWin.SetSize(w, h)
-		a.placeDesk(spot(b.X, b.Y, w, h, 40))
+		a.placeDesk(a.deskFitSpot(b.X, b.Y, false))
 		a.placeDeskMore()
 	}
 }
@@ -191,7 +199,42 @@ func (a *app) deskSpot(x, y int) (int, int) {
 		wa := mygo.Screen.PrimaryDisplay().WorkArea
 		return wa.X + wa.Width - w - 40, wa.Y + (wa.Height-h)/2
 	}
-	return spot(x, y, w, h, 40)
+	return a.deskFitSpot(x, y, a.settings.DeskVertical)
+}
+
+// deskFitSpot returns where the lyrics' window, lying or standing, goes,
+// left at x, y: there, if what of them shows is on a screen, or brought
+// just as far as that needs. The window is far larger than they are, and
+// clear around them; brought on the screen whole, lyrics left by its edge
+// moved away from it as they were locked (1.3.9).
+func (a *app) deskFitSpot(x, y int, vertical bool) (int, int) {
+	w, h := deskW, deskH+a.deskExtraH()
+	if vertical {
+		w, h = deskVW, deskVH
+	}
+	if !mygo.App.IsReady() || (x == 0 && y == 0) {
+		return spot(x, y, w, h, 40)
+	}
+	k := a.deskKeep(vertical, w)
+	kx, ky := x+int(k.X), y+int(k.Y)
+	if fx, fy, ok := fitIn(screenAreas(), kx, ky, int(math.Ceil(float64(k.W))), int(math.Ceil(float64(k.H)))); ok {
+		return x + fx - kx, y + fy - ky
+	}
+	return spot(0, 0, w, h, 40)
+}
+
+// deskKeep is what of the lyrics shows in their window, w wide, lying or
+// standing: the lyrics as laid out last, and their tools over them, or as
+// they show at first if not laid out so yet.
+func (a *app) deskKeep(vertical bool, w int) ui.Rect {
+	tools := ui.Rect{X: float32(w)/2 - 60, Y: deskToolsRoom - 35, W: 120, H: 30}
+	if body := a.desk.bodyAt; body.W > 0 && a.deskWin != nil && a.desk.vertical == vertical {
+		return unionRect(body, tools)
+	}
+	if vertical {
+		return unionRect(tools, ui.Rect{X: float32(w)/2 - 40, Y: deskToolsRoom, W: 80, H: 300})
+	}
+	return unionRect(tools, ui.Rect{X: float32(w)/2 - 160, Y: deskToolsRoom, W: 320, H: 70})
 }
 
 // setDeskVertical stands the lyrics up or lays them down: their window is
@@ -221,7 +264,7 @@ func (a *app) setDeskVertical(v bool) {
 		w, h = deskW, deskH+a.deskExtraH()
 	}
 	to := mygo.Rectangle{Width: w, Height: h}
-	to.X, to.Y = spot(old.X+old.Width/2-w/2, old.Y+old.Height/2-h/2, w, h, 40)
+	to.X, to.Y = a.deskFitSpot(old.X+old.Width/2-w/2, old.Y+old.Height/2-h/2, v)
 	// The characters take over from the window before it goes: they show
 	// where it showed them until their own window is up, and only then is
 	// the window made again (finishDeskTurn), with no frame of nothing.
@@ -237,6 +280,9 @@ func (a *app) turnDesk(v bool, to mygo.Rectangle) {
 	s := &a.settings
 	s.DeskVertical = v
 	s.DeskX, s.DeskY = to.X, to.Y
+	// A long line slides afresh the other way: slid as far as it was
+	// across, it glided there down its column as it landed.
+	a.deskSlider = deskSlideState{}
 	a.stopDeskWatch()
 	a.dropFloat(&a.deskWin)
 	a.applyDeskLyrics()
@@ -395,7 +441,9 @@ func (a *app) deskView(c *ui.Context) {
 	// or how large, and the line sung stays put as the one under it comes
 	// and goes.
 	root := ui.Column(c.Key("desk")).Fill().AlignItems(ui.Center).Padding(deskToolsRoom, 24, 0, 24)
-	over := root.Hovered()
+	// Letting the pointer through, the window may hear of it leaving late.
+	over := root.Hovered() && !a.desk.through
+	a.desk.over = over
 	if over && !s.DeskLock {
 		root.Cursor(ui.CursorGrab)
 	}
@@ -448,16 +496,11 @@ func (a *app) deskView(c *ui.Context) {
 	}
 }
 
-// deskControls are the tools over unlocked lyrics, or the button that
-// unlocks them over locked ones, the pointer over them.
+// deskControls are the tools over unlocked lyrics. Over locked ones, the
+// button that unlocks them has a window of its own (showDeskUnlock).
 func (a *app) deskControls(c *ui.Context, look deskLook, over bool) {
-	switch {
-	case !a.settings.DeskLock:
+	if !a.settings.DeskLock {
 		a.deskTools(c, look, over)
-	case a.desk.near:
-		a.deskUnlock(c)
-	default:
-		a.desk.unlockAt = ui.Rect{}
 	}
 }
 
@@ -465,13 +508,15 @@ func (a *app) deskControls(c *ui.Context, look deskLook, over bool) {
 // line sung on the right, in columns from the right if it is long, and the
 // one under it, or its translation, to its left.
 func (a *app) deskStanding(c *ui.Context, main deskMain, next string, pos time.Duration, look deskLook, nextSize, shown, nextShown float32) ui.Rect {
-	body := ui.Row(c.Key("body")).Gap(6).AlignItems(ui.Start).DragWindow()
+	// Room between the columns: a line's words lying on their side reach
+	// past their column a little, and touched its translation's (1.3.10).
+	body := ui.Row(c.Key("body")).Gap(14).AlignItems(ui.Start).DragWindow()
 	pad := float32(0)
 	if look.pill.A > 0 {
 		pad = 16
 		body.Padding(pad, 10).Radius(20).Background(look.pill)
 	}
-	room := float32(deskVH-deskToolsRoom-8) - 2*pad
+	room := a.deskStandRoom()
 	// Where each character of the line sung stands, for those flying to
 	// it or from it: laid out anew each frame.
 	a.deskStood = a.deskStood[:0]
@@ -486,7 +531,12 @@ func (a *app) deskStanding(c *ui.Context, main deskMain, next string, pos time.D
 			under(a.deskColumns(c, "next", []rune(next), func(int) ui.Color { return look.second }, nextSize, 700, room, look, false))
 		}
 		chars, colors := a.deskChars(main, look, pos)
-		line := a.deskColumns(c, "main", chars, func(i int) ui.Color { return colors[i] }, main.size, 800, room, look, true)
+		var line ui.Element
+		if main.scroll {
+			line = a.deskScrollColumn(c, main, chars, colors, pos, room, look)
+		} else {
+			line = a.deskColumns(c, "main", chars, func(i int) ui.Color { return colors[i] }, main.size, 800, room, look, true)
+		}
 		if shown < 1 {
 			line.Opacity(shown)
 		}
@@ -536,7 +586,7 @@ func upright(r rune) bool {
 }
 
 // deskPieces cuts chars into what stands as one, at size.
-func deskPieces(c *ui.Context, chars []rune, size float32, weight int) []deskPiece {
+func deskPieces(chars []rune, size float32, weight int, family string) []deskPiece {
 	var out []deskPiece
 	for i := 0; i < len(chars); {
 		if upright(chars[i]) {
@@ -544,35 +594,42 @@ func deskPieces(c *ui.Context, chars []rune, size float32, weight int) []deskPie
 			i++
 			continue
 		}
+		// A run of others lies word by word, each a piece of its own, the
+		// spaces between them room: a long English line, one piece, was
+		// longer than a column and cut short with an ellipsis (1.3.9); now
+		// its words go on into the next column as characters do.
 		j := i
-		for j < len(chars) && !upright(chars[j]) {
+		for j < len(chars) && !upright(chars[j]) && !unicode.IsSpace(chars[j]) {
 			j++
 		}
-		run := strings.TrimSpace(string(chars[i:j]))
-		if run == "" {
+		if j == i {
 			out = append(out, deskPiece{at: i, h: size * 0.4}) // a space between
-		} else {
-			w, _ := c.MeasureText(0, ui.Span{Text: run, Size: size, Weight: weight})
-			out = append(out, deskPiece{text: run, at: i, sideways: true, h: w + size*0.3})
+			i++
+			continue
 		}
+		// Measured in the font it shows in: in the app's, a serif lyric
+		// font's words came out longer than their room, and were cut to
+		// an ellipsis (1.3.10 test.2).
+		w, _ := ui.ShapeText(string(chars[i:j]), ui.Font{Family: family, Size: size, Weight: weight}, 0).Size()
+		out = append(out, deskPiece{text: string(chars[i:j]), at: i, sideways: true, h: w + size*0.3})
 		i = j
 	}
 	return out
 }
 
-// deskColumns stands chars up in room: smaller, down to 18, to fit in one
-// column, and else in as many as they take, the first on the right.
+// deskColumns stands chars up in room, in as many columns as they take,
+// the first on the right.
 func (a *app) deskColumns(c *ui.Context, key string, chars []rune, color func(int) ui.Color, size float32, weight int, room float32, look deskLook, record bool) ui.Element {
-	tall := func(ps []deskPiece) (h float32) {
-		for _, p := range ps {
-			h += p.h
-		}
-		return h
+	pieces := deskPieces(chars, size, weight, a.deskFamily())
+	// A word longer than a column is made small enough to fit in one; the
+	// rest keep their size, in columns as many as they take.
+	var longest float32
+	for _, p := range pieces {
+		longest = max(longest, p.h)
 	}
-	pieces := deskPieces(c, chars, size, weight)
-	if h := tall(pieces); h > room {
-		size = max(size*room/h, min(size, 18))
-		pieces = deskPieces(c, chars, size, weight)
+	if longest > room {
+		size *= room / longest
+		pieces = deskPieces(chars, size, weight, a.deskFamily())
 	}
 	var cols [][]deskPiece
 	var h float32
@@ -585,14 +642,16 @@ func (a *app) deskColumns(c *ui.Context, key string, chars []rune, color func(in
 	}
 	return ui.Row(c.Key(key)).Gap(4).AlignItems(ui.Start).PassThrough().Children(func() {
 		for i := len(cols) - 1; i >= 0; i-- {
-			a.deskColumn(c, i, cols[i], color, size, weight, look, record)
+			a.deskColumn(c, i, cols[i], color, size, weight, look, record, nil)
 		}
 	})
 }
 
 // deskColumn is a column of what stands, edged as the lines lying down are,
 // with eight copies of it around it.
-func (a *app) deskColumn(c *ui.Context, key int, pieces []deskPiece, color func(int) ui.Color, size float32, weight int, look deskLook, record bool) {
+// fade, if not nil, is how far each character, by its index, shows, its
+// edge with it.
+func (a *app) deskColumn(c *ui.Context, key int, pieces []deskPiece, color func(int) ui.Color, size float32, weight int, look deskLook, record bool, fade func(int) float32) {
 	wide := size * deskStep
 	col := func(k any, ink func(int) ui.Color) ui.Element {
 		return ui.Column(c.Key(k)).Width(wide).PassThrough().Children(func() {
@@ -612,7 +671,7 @@ func (a *app) deskColumn(c *ui.Context, key int, pieces []deskPiece, color func(
 					}
 					// Lying, turned about its middle to the middle of
 					// its room.
-					w := p.h - size*0.3
+					w := p.h - size*0.1 // its room, and a little more: never cut short
 					t.Absolute().Width(w).Height(wide).LineHeight(deskStep).TextAlign(ui.Center).
 						Left((wide - w) / 2).Top((p.h - wide) / 2).Rotate(90)
 				})
@@ -625,7 +684,12 @@ func (a *app) deskColumn(c *ui.Context, key int, pieces []deskPiece, color func(
 			width := max(1.1, size*0.055)
 			for i := range 8 {
 				turn := float64(i) * math.Pi / 4
-				col(i, func(int) ui.Color { return look.edge }).Absolute().
+				col(i, func(at int) ui.Color {
+					if fade != nil {
+						return look.edge.Alpha(float32(look.edge.A) / 255 * fade(at))
+					}
+					return look.edge
+				}).Absolute().
 					Left(width * float32(math.Cos(turn))).Top(width * float32(math.Sin(turn)))
 			}
 		}
@@ -660,11 +724,17 @@ func (a *app) deskNextChange(lines []lyrics.Line, pos time.Duration) time.Durati
 	return max(wait+10*time.Millisecond, frame)
 }
 
-// deskUnlock is the button over locked lyrics that unlocks them, while the
-// pointer is over them. The window lets the pointer through but there, as
-// watchDesk has it.
-func (a *app) deskUnlock(c *ui.Context) {
-	ui.Row(c.Key("unlock-row")).Absolute().Top(deskToolsRoom - 35).Left(0).Right(0).Justify(ui.Center).PassThrough().Children(func() {
+// deskUnlockView is the button that unlocks locked lyrics, in its window
+// over them while the pointer is over them (showDeskUnlock): it comes in.
+func (a *app) deskUnlockView(c *ui.Context) {
+	a.floatTheme(c)
+	k := float32(1)
+	if since := a.desk.unlockSince; !since.IsZero() && a.motion != motionOff {
+		if k = easeRange(clamp01(float32(c.Now().Sub(since))/float32(160*time.Millisecond)), 0, 1); k < 1 {
+			c.AnimationFrame()
+		}
+	}
+	ui.Row(c.Key("unlock-row")).Fill().Justify(ui.Center).AlignItems(ui.Center).Opacity(k).Scale(0.85+0.15*k, 0.85+0.15*k).Children(func() {
 		b := ui.ButtonBase(c.Key("unlock")).Size(30, 30).Radius(999).Center().FocusRing(false).Label("解锁桌面歌词")
 		fade := ui.Animation{Duration: 120 * time.Millisecond}
 		bg, fg := a.miniSurface().Alpha(0.78), white.Alpha(0.8)
@@ -674,7 +744,6 @@ func (a *app) deskUnlock(c *ui.Context) {
 		b.Background(b.AnimateColor("bg", bg, fade)).TextColor(b.AnimateColor("fg", fg, fade)).
 			Border(1, white.Alpha(0.14)).Shadow(0, 6, 16, -6, ui.RGBA(0, 0, 0, 0.5))
 		b.Children(func() { ui.Icon(c, iconUnlock).Size(14, 14) })
-		a.desk.unlockAt = b.LayoutBounds()
 		if b.Clicked() {
 			a.toggleDeskLock()
 			a.say("desk-lock", "桌面歌词已解锁")
@@ -770,6 +839,7 @@ func (a *app) deskTools(c *ui.Context, look deskLook, shown bool) {
 	ui.Row(c.Key("tools-row")).Absolute().Top(deskToolsRoom - 35).Left(0).Right(0).Justify(ui.Center).PassThrough().Children(func() {
 		bar := ui.Row(c.Key("tools")).Height(30).Padding(2).Gap(1).Radius(999).AlignItems(ui.Center).
 			Background(a.miniSurface().Alpha(0.94)).Border(1, white.Alpha(0.14)).Shadow(0, 6, 16, -6, ui.RGBA(0, 0, 0, 0.5))
+		a.desk.toolsAt = bar.LayoutBounds()
 		bar.AnimatePose(pose, ui.Animation{Spring: ui.SpringOptions{Duration: 280 * time.Millisecond, Bounce: 0.18}})
 		bar.Children(func() {
 			// Every button keeps its width, whatever it says: one that changed

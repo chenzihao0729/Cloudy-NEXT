@@ -48,18 +48,49 @@ func (a *app) deskNowSprites() []deskSprite {
 	}
 	b := a.deskWin.Bounds()
 	main, _ := a.deskLines()
+	// Sliding, those of its characters showing fly, faded as they show at
+	// the ends of its room: it turned at once, with none (1.3.10 test.5).
+	slid := &a.deskSlider
+	if main.scroll && (slid.line != main.text || slid.room.W <= 0) {
+		return nil // not laid out sliding yet
+	}
+	var out []deskSprite
 	if a.settings.DeskVertical {
-		return a.deskStandingSprites(main, b)
+		out = a.deskStandingSprites(main, b)
+		if main.scroll {
+			top := float32(b.Y) + slid.room.Y
+			out = deskShowing(out, func(s deskSprite) float32 { return slid.shows(s.y-top, slid.room.H) })
+		}
+		return out
 	}
-	if a.deskLineAt.W == 0 || main.scroll {
-		return nil // sliding, it turns at once
+	if a.deskLineAt.W == 0 {
+		return nil
 	}
-	return a.deskLyingSprites(main, a.deskLineAt, b)
+	if !main.scroll {
+		return a.deskLyingSprites(main, a.deskLineAt, b, 0)
+	}
+	out = a.deskLyingSprites(main, slid.room, b, slid.off)
+	left := float32(b.X) + slid.room.X
+	return deskShowing(out, func(s deskSprite) float32 { return slid.shows(s.x-left, slid.room.W) })
+}
+
+// deskShowing returns the sprites that show, by shows, faded as much.
+func deskShowing(sprites []deskSprite, shows func(deskSprite) float32) []deskSprite {
+	out := sprites[:0]
+	for _, s := range sprites {
+		k := shows(s)
+		if k <= 0.02 {
+			continue
+		}
+		s.color = s.color.Alpha(float32(s.color.A) / 255 * k)
+		out = append(out, s)
+	}
+	return out
 }
 
 // deskLyingSprites returns the characters of m lying at line in the window
-// at win, as deskLine lays them out.
-func (a *app) deskLyingSprites(m deskMain, line ui.Rect, win mygo.Rectangle) []deskSprite {
+// at win, as deskLine lays them out, or as deskScrollLine does, slid by off.
+func (a *app) deskLyingSprites(m deskMain, line ui.Rect, win mygo.Rectangle, off float32) []deskSprite {
 	look := a.deskLookOf(a.settings.DeskStyle)
 	pos := a.lyricPos()
 	_, colors := a.deskChars(m, look, pos)
@@ -78,13 +109,13 @@ func (a *app) deskLyingSprites(m deskMain, line ui.Rect, win mygo.Rectangle) []d
 		if c1.Y != c0.Y || x1 <= c0.X {
 			x1 = c0.X + m.size*0.6 // the last of a line wrapped
 		}
-		if strings.TrimSpace(text) != "" && c0.X < deskRoom {
+		if strings.TrimSpace(text) != "" && (off > 0 || c0.X < deskRoom) {
 			color := ui.Color{}
 			if r < len(colors) {
 				color = colors[r]
 			}
 			out = append(out, deskSprite{text: text, at: r, size: m.size, color: color,
-				x: float32(win.X) + line.X + (c0.X+x1)/2, y: float32(win.Y) + line.Y + c0.Y + c0.H/2})
+				x: float32(win.X) + line.X - off + (c0.X+x1)/2, y: float32(win.Y) + line.Y + c0.Y + c0.H/2})
 		}
 		r += len([]rune(text))
 		at = next
@@ -105,6 +136,11 @@ func (a *app) deskStandingSprites(m deskMain, win mygo.Rectangle) []deskSprite {
 	}
 	var out []deskSprite
 	for _, st := range a.deskStood {
+		if st.at.W <= 0 || st.at.H <= 0 {
+			// Not laid out yet, as it first shows: it went to the
+			// window's corner for a frame, all of them in a heap there.
+			continue
+		}
 		cx := float32(win.X) + st.at.X + st.at.W/2
 		cy := float32(win.Y) + st.at.Y + st.at.H/2
 		p := st.piece
@@ -169,13 +205,25 @@ func (a *app) deskFlySprites(f *deskFlight) (from, to []deskSprite, ok bool) {
 	case f.turning && f.turnPending:
 		return f.src, nil, false
 	case f.turning:
-		to = a.deskNowSprites()
+		to = f.landing(a.deskNowSprites())
 		return f.src, to, len(to) > 0
 	case f.opening:
-		to = a.deskNowSprites()
+		to = f.landing(a.deskNowSprites())
 		return nil, to, len(to) > 0
 	}
 	return f.src, nil, true
+}
+
+// landing returns where the characters land, to, as the lyrics' window has
+// them now, or as it had them last if it has none this frame: once on their
+// way, a frame the window has yet to lay them out in again sent them back to
+// the start of it.
+func (f *deskFlight) landing(to []deskSprite) []deskSprite {
+	if len(to) == 0 {
+		return f.lastTo
+	}
+	f.lastTo = to
+	return to
 }
 
 // deskSpriteTiming returns how long after the one before each character of
@@ -248,6 +296,19 @@ func (a *app) paintDeskSprites(p *ui.Painter, f *deskFlight, gone time.Duration)
 				sp.lh = s1.lh
 			}
 			a.paintDeskSprite(p, sp, x, y, scale, turn, s0.color.Mix(s1.color, e), look)
+		}
+		// Those of a long line that show only the other way, in more room
+		// than it had: they come in where they land, as the others near.
+		fromAt := make(map[int]bool, len(from))
+		for _, s := range from {
+			fromAt[s.at] = true
+		}
+		_, _, total := deskSpriteTiming(f, len(from))
+		u := easeRange(clamp01(float32(gone)/float32(total)), 0.35, 1)
+		for _, s1 := range to {
+			if !fromAt[s1.at] {
+				a.paintDeskSprite(p, s1, s1.x-ox, s1.y-oy, lerp(0.8, 1, u), s1.turn, s1.color.Alpha(float32(s1.color.A)/255*u), look)
+			}
 		}
 	case f.opening:
 		lag, fly, _ := deskSpriteTiming(f, len(to))

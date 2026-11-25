@@ -51,6 +51,7 @@ type deskFlight struct {
 	// origin is the flight's window's corner on the screen.
 	sprites, turning bool
 	src              []deskSprite
+	lastTo           []deskSprite // where they landed as last laid out (landing)
 	origin           ui.Point
 	waited           int // frames waiting for where they go
 	// turnPending says the window is yet to be made again, standing as
@@ -82,9 +83,6 @@ const (
 	// deskShrink is how much smaller than its size the line under the one
 	// sung goes, at most, to fit; longer, it ends in an ellipsis.
 	deskShrink = 0.72
-	// deskScrollShrink is how much smaller than its size the line sung
-	// goes, at most, to fit; longer, it slides along as it is sung.
-	deskScrollShrink = 0.85
 )
 
 // deskLines returns the line the desktop lyrics show large, and the one
@@ -120,7 +118,13 @@ func (a *app) deskLines() (main deskMain, next string) {
 		next = subs[0]
 	}
 	if s.DeskVertical {
-		return main, next // standing, deskColumns fits them
+		// Standing, too tall for its column, it slides up it as it is sung.
+		var tall float32
+		for _, p := range deskPieces([]rune(main.text), main.size, 800, a.deskFamily()) {
+			tall += p.h
+		}
+		main.scroll = tall > a.deskStandRoom()
+		return main, next
 	}
 	main.size, main.scroll = a.deskFit(main)
 	return main, next
@@ -131,18 +135,13 @@ func (a *app) deskLines() (main deskMain, next string) {
 const deskReadingSize = 16
 
 // deskFit returns the size the line m shows at, and whether it slides: as
-// large as it is if it fits, smaller, down to deskScrollShrink of that, if
-// that has it fit, and else that small, sliding along as it is sung. On two
+// large as it is, sliding along as it is sung if it does not fit. On two
 // lines, a long line was hard to follow; cut short, only its start showed.
 func (a *app) deskFit(m deskMain) (float32, bool) {
 	w, _ := a.deskShape(m, deskLook{}, 0, false).Size()
-	if w <= deskRoom {
-		return m.size, false
-	}
-	if fit := m.size * deskRoom / w * 0.98; fit >= m.size*deskScrollShrink {
-		return fit, false
-	}
-	return m.size * deskScrollShrink, true
+	// Too long, it slides at its own size: made smaller first, it read
+	// as a smaller line, where the listener wanted it to scroll (1.3.10).
+	return m.size, w > deskRoom
 }
 
 // deskNextSize returns the size the line under the one sung shows at: as
@@ -195,13 +194,17 @@ func (a *app) startDeskFly(opening bool, desk mygo.Rectangle) bool {
 		return false
 	}
 	main, _ := a.deskLines()
-	if strings.TrimSpace(main.text) == "" || main.scroll && !a.settings.DeskVertical {
-		// Sliding, it shows at once, not character by character.
+	if strings.TrimSpace(main.text) == "" {
 		return false
 	}
 	cb := a.win.ContentBounds()
 	btn := ui.Rect{X: float32(cb.X) + a.deskBtn.X, Y: float32(cb.Y) + a.deskBtn.Y, W: a.deskBtn.W, H: a.deskBtn.H}
-	if a.settings.DeskVertical {
+	if a.settings.DeskVertical || main.scroll {
+		// Standing, or sliding, character by character as they show in
+		// the window: a line sliding showed at once (1.3.10 test.5).
+		if opening {
+			a.deskSlider = deskSlideState{} // laid out afresh by the new window
+		}
 		return a.startDeskStandFly(opening, desk, btn, main.size)
 	}
 	// Where the line lies: as the lyrics' window laid it out last, going

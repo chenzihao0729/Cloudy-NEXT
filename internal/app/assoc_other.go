@@ -9,3 +9,6 @@ import "errors"
 const canRegisterOpenWith = false
 
 func registerOpenWith() error { return errors.New("not supported") }
+
+func openWithRegistered() bool  { return false }
+func unregisterOpenWith() error { return errors.New("not supported") }

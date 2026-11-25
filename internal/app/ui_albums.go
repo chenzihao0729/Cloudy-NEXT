@@ -147,6 +147,7 @@ func (a *app) myAlbumsSection(c *ui.Context) {
 		if b.Clicked() {
 			a.albumsCollapsed = !a.albumsCollapsed
 		}
+		a.contextMenu(b, false, func() [][]menuAction { return a.sideMenu(title) }, nil)
 		b.Expanded(!a.albumsCollapsed)
 		if b.Hovered() {
 			b.Background(p.hover)

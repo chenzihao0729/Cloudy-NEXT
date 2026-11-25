@@ -103,6 +103,9 @@ func (a *app) restoreSession() {
 	}
 	a.savedSession = string(b)
 	a.pl.Restore(s)
+	// Kept from the last run, the songs say what the listener could play
+	// then: a membership renewed since lets them play more.
+	a.recheckQueue(true)
 	if s.Radio != "" && a.pl.Current() != nil {
 		a.pl.AttachRadio(s.Radio, a.radioFeed(s.Radio))
 	}

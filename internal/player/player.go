@@ -1222,7 +1222,7 @@ func openLocal(path string, d int64) (*netease.Stream, stream, error) {
 	}
 	st := &netease.Stream{Size: info.Size(), Type: ext, Level: "exhigh", Path: path}
 	switch ext {
-	case "flac", "wav":
+	case "flac", "wav", "aif", "aiff", "aifc":
 		st.Level = "lossless"
 	case "dsf", "dff":
 		st.Level = "hires"

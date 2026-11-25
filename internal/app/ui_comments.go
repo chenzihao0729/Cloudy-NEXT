@@ -208,13 +208,18 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 		ui.Column(c).Gap(2).Children(func() {
 			if len(cs.hot) > 0 {
 				commentHeadingIn(c, "精彩评论", ink)
-				for i := range cs.hot {
-					a.commentRow(c.Key(commentKey{true, cs.hot[i].ID}), &cs.hot[i], now)
+				// Over copies: a row's delete takes its comment out of the
+				// lists as the rows are built (removeComment), which read
+				// past their new ends crashed the app.
+				hot := cs.hot
+				for i := range hot {
+					a.commentRow(c.Key(commentKey{true, hot[i].ID}), &hot[i], now)
 				}
 			}
 			commentHeadingIn(c, "最新评论 "+count(cs.total), ink)
-			for i := range cs.latest {
-				a.commentRow(c.Key(commentKey{false, cs.latest[i].ID}), &cs.latest[i], now)
+			latest := cs.latest
+			for i := range latest {
+				a.commentRow(c.Key(commentKey{false, latest[i].ID}), &latest[i], now)
 			}
 			if cs.loading {
 				a.mk.comments = time.Now()

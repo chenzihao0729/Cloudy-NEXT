@@ -217,7 +217,7 @@ func TestSettingsSearch(t *testing.T) {
 		t.Fatal("searching 翻译 did not find just the translation")
 	}
 	search("缓存")
-	if !tt.HasText("歌曲缓存") || !tt.HasText("清除缓存") || !tt.HasText("下载与缓存") {
+	if !tt.HasText("歌曲缓存") || !tt.HasText("清除歌曲缓存") || !tt.HasText("下载与缓存") {
 		t.Fatal("searching 缓存 did not find the cache under its category")
 	}
 	// A group's title shows all its rows.

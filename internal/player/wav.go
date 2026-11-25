@@ -35,6 +35,9 @@ type wavFormat struct {
 	valid         int // the bits of them that hold the sound
 	align         int // bytes of a frame, every channel's sample
 	start, length int64
+	// bigEndian and signed8 are AIFF's samples (aiff.go): their bytes the
+	// other way round, and eight bits signed rather than about 128.
+	bigEndian, signed8 bool
 }
 
 const (
@@ -184,7 +187,10 @@ func (s *wavStream) Read(dst []float32) (int, error) {
 
 // sample is the sound of a sample's bytes, from -1 to 1.
 func (s *wavStream) sample(b []byte) float32 {
-	le := binary.LittleEndian
+	var le binary.ByteOrder = binary.LittleEndian
+	if s.bigEndian {
+		le = binary.BigEndian
+	}
 	if s.float {
 		if len(b) == 8 {
 			return float32(math.Float64frombits(le.Uint64(b)))
@@ -193,11 +199,18 @@ func (s *wavStream) sample(b []byte) float32 {
 	}
 	switch len(b) {
 	case 1:
-		// Eight bits are unsigned, about 128.
+		// Eight bits are unsigned, about 128, but AIFF's signed.
+		if s.signed8 {
+			return float32(int8(b[0])) / 128
+		}
 		return float32(int(b[0])-128) / 128
 	case 2:
 		return float32(int16(le.Uint16(b))) / (1 << 15)
 	case 3:
+		if s.bigEndian {
+			v := int32(uint32(b[2])<<8|uint32(b[1])<<16|uint32(b[0])<<24) >> 8
+			return float32(v) / (1 << 23)
+		}
 		v := int32(uint32(b[0])<<8|uint32(b[1])<<16|uint32(b[2])<<24) >> 8
 		return float32(v) / (1 << 23)
 	}

@@ -92,33 +92,40 @@ type app struct {
 	historyScroll []float32
 	forwardScroll []float32
 
-	profile      *netease.Profile
-	accountGen   int                // rejects results from an earlier login, including the same account
-	mine, saved  []netease.Playlist // the listener's playlists: made, and saved
-	savingPl     map[int64]bool     // the playlists whose saving or its end is on its way
-	recPlaylists []netease.Playlist // the day's playlists picked for the listener
-	myAlbums     []netease.AlbumProfile
-	myAlbumsErr  string
-	myAlbumsBusy bool
-	login        loginState
-	accountOpen  bool      // the dropdown of the account row shows
-	accountMenuH float32   // the account menu's full height, as last laid out
-	accountShut  time.Time // when a press outside put the account menu away
-	dm           privateMessagesState
-	naming       nameDialog     // the name of a playlist asked for
-	deleting     deleteDialog   // whether to delete a playlist, asked
-	signingOut   bool           // whether to sign out, asked
-	liked        map[int64]bool // the songs the listener likes
-	likeEdits    map[int64]*likeEdit
-	likeNext     time.Time // earliest next individual song request
-	likeRevision int       // local edits newer than a personal-data request
-	likeBatches  int       // bulk requests still being sent
-	librarySync  librarySync
-	playlistAt   map[int64]time.Time
-	redCounts    map[int64]*redCountState
-	toast        string   // a message to show once
-	toastAs      string   // what the toast says the state of, to take the place of the last
-	picked       pickedUp // the song a login picked up, waiting to play
+	profile    *netease.Profile
+	accountGen int // rejects results from an earlier login, including the same account
+	// privAsked is when NetEase was last asked what may be played of a
+	// song, and queueRechecked when the queue was (playable_recheck.go).
+	privAsked map[int64]time.Time
+	// openWithOn is whether Cloudy is among the apps that open songs, as
+	// the settings last asked the system; nil, not asked yet.
+	openWithOn     *bool
+	queueRechecked time.Time
+	mine, saved    []netease.Playlist // the listener's playlists: made, and saved
+	savingPl       map[int64]bool     // the playlists whose saving or its end is on its way
+	recPlaylists   []netease.Playlist // the day's playlists picked for the listener
+	myAlbums       []netease.AlbumProfile
+	myAlbumsErr    string
+	myAlbumsBusy   bool
+	login          loginState
+	accountOpen    bool      // the dropdown of the account row shows
+	accountMenuH   float32   // the account menu's full height, as last laid out
+	accountShut    time.Time // when a press outside put the account menu away
+	dm             privateMessagesState
+	naming         nameDialog     // the name of a playlist asked for
+	deleting       deleteDialog   // whether to delete a playlist, asked
+	signingOut     bool           // whether to sign out, asked
+	liked          map[int64]bool // the songs the listener likes
+	likeEdits      map[int64]*likeEdit
+	likeNext       time.Time // earliest next individual song request
+	likeRevision   int       // local edits newer than a personal-data request
+	likeBatches    int       // bulk requests still being sent
+	librarySync    librarySync
+	playlistAt     map[int64]time.Time
+	redCounts      map[int64]*redCountState
+	toast          string   // a message to show once
+	toastAs        string   // what the toast says the state of, to take the place of the last
+	picked         pickedUp // the song a login picked up, waiting to play
 
 	// The episodes the listener likes, and doesn't, as far as NetEase has
 	// answered, and those asked about: see ui_like.go.
@@ -258,6 +265,7 @@ type app struct {
 	deskFly               deskFlight       // the desktop lyrics on their way out of it or back
 	deskLineAt            ui.Rect          // where the desktop lyrics laid out their line last
 	deskStood             []deskStood      // where the standing lyrics laid out each character last
+	deskSlider            deskSlideState   // how far the desktop lyrics' long line has slid (desk_scroll.go)
 	desk                  deskState        // the desktop lyrics' unlock button, and what they keep out of the way of
 	sleep                 sleepState       // the timer that pauses the music
 	keys                  shortcutState    // the global keys and the menu keys
@@ -296,6 +304,7 @@ type app struct {
 	update       updateState     // the update pane, and the update it found
 	whatsNew     whatsNewState   // what the version updated to brought, said once
 	cacheUsed    int64           // the bytes the song cache takes, -1 until measured
+	otherUsed    int64           // and the pictures' (art_disk.go)
 	updates      bool            // the update plugin is used (useUpdater)
 	fontList     []uiFont        // the fonts on offer here (fontChoices)
 	fontsLoaded  map[string]bool // the fonts of files registered, by id (loadFont)
@@ -318,6 +327,8 @@ type app struct {
 	hist          historyDaily // the past daily recommendations NetEase keeps
 	deckDrawer    bool         // the settings' drawer of what the calendar holds is open
 	deckSort      deckSort     // a page dragged to a new place in that drawer
+	sideDrawer    bool         // the settings' drawer of what the sidebar shows is open
+	sideSort      sideSort     // an item dragged to a new place in it
 	queueAdding   bool         // the queue's drawer of playlists to add it to is open
 	radar         radarState   // NetEase's radars on the home page
 	lyricDownload lyricDownloadState
@@ -403,6 +414,7 @@ func Run() error {
 		lyricAt:    -1,
 		queueAt:    -1,
 		cacheUsed:  -1,
+		otherUsed:  -1,
 	}
 	// One Cloudy at a time: launched again, it shows the window of the one
 	// running, from the tray too, and goes. An update starts the new
@@ -426,6 +438,7 @@ func Run() error {
 	a.useUpdater()
 	mygo.App.WhenReady(func() {
 		a.settings = loadSettings()
+		a.sideFold()
 		netease.StartDiagLog(mygo.App.Version())
 		ui.SetIgnoreReduceMotion(a.settings.IgnoreSystemMotion)
 		a.applyUpdateSource()
@@ -436,6 +449,9 @@ func Run() error {
 		// Before the window: on Windows it lays out its content as it is
 		// made, and the view asks the player what plays.
 		a.art = newArtCache(a.post)
+		if dir := otherCacheDir(a.settings.CacheFolder); dir != "" {
+			a.art.disk = newArtDisk(dir, int64(a.settings.OtherCacheMB)<<20)
+		}
 		a.pl = player.New(a.post)
 		a.loadSourcePlugin()
 		a.pl.PodcastSpeed = a.settings.PodcastSpeed
@@ -536,6 +552,7 @@ func Run() error {
 		// Shown or switched to the morning after, it shows the new day's.
 		a.win.OnFocus(func() {
 			a.freshenPersonal()
+			a.recheckQueue(false)
 			a.privateWindowFocused(time.Now())
 		})
 		a.win.OnBlur(func() {

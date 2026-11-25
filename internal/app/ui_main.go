@@ -444,24 +444,12 @@ func (a *app) sidebar(c *ui.Context, foreground float32) {
 				nav.Effect(scrollEdgeFade{depth: 34, top: top, bottom: bottom})
 			}
 			nav.Children(func() {
-				a.navItem(c, iconHome, "为你推荐", route{page: pageHome})
-				a.navItem(c, iconRadio, "私人 FM", route{page: pageFM})
-				a.navItem(c, iconCharts, "排行榜", route{page: pageCharts})
-				a.navItem(c, iconPodcast, "播客", route{page: pagePodcasts})
-				a.navItem(c, iconDownload, "下载歌曲", route{page: pageDownloads})
-				a.navItem(c, iconLibrary, "本地音乐", route{page: pageLocal})
-				a.navItem(c, iconHistory, "最近播放", route{page: pageRecent})
-				if a.profile != nil {
-					a.navItem(c, iconCloud, "我的音乐云盘", route{page: pageCloud})
-				}
-				if a.searched.query != "" {
-					a.navItem(c, iconSearch, "搜索结果", a.searched)
-				}
-				a.myPlaylists(c, "我的歌单", a.mine, true, &a.mineCollapsed)
-				a.myPlaylists(c, "收藏的歌单", a.saved, false, &a.savedCollapsed)
-				a.myAlbumsSection(c)
+				a.sideList(c)
 			})
 		})
+		// A right press where nothing of the sidebar's own takes it: to
+		// edit what it shows.
+		a.contextMenu(nav, false, func() [][]menuAction { return a.sideMenu("") }, nil)
 
 		// What plays, as a card at the foot of the sidebar, over who listens.
 		// Not with the bar of glass, which says as much, and more, beside it.
@@ -496,6 +484,7 @@ func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	if b.Clicked() {
 		a.open(r)
 	}
+	a.contextMenu(b, false, func() [][]menuAction { return a.sideMenu(label) }, nil)
 }
 
 func (a *app) sidebarNowPlaying(c *ui.Context, tr *netease.Track) {

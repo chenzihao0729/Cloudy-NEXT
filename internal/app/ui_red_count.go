@@ -77,12 +77,12 @@ func (a *app) likeCountButton(c *ui.Context, tr *netease.Track, size float32, co
 // countedHeart can put the count in its tooltip only, without reserving
 // empty space for it in a narrow player bar.
 func (a *app) countedHeart(c *ui.Context, tr *netease.Track, size float32, color ui.Color, showCount bool) ui.Element {
-	// External catalogs currently have no verified social-count adapter.
-	// Never interpret their synthetic ID as a NetEase song or show a fake zero.
 	if tr.Source != nil {
 		return ui.Box(c)
 	}
-	if tr.LocalPath != "" || tr.ProgramID != 0 {
+	// A downloaded song, or a file found on NetEase, counts as NetEase's
+	// song does: its count is the song's.
+	if heartless(tr) || tr.ProgramID != 0 {
 		return a.likeButton(c, tr, size, color)
 	}
 	s := a.askRedCount(tr.ID)

@@ -24,7 +24,7 @@ var (
 // and then with NetEase, which may refuse: the heart goes back then. Signed
 // out, it asks the listener to sign in.
 func (a *app) toggleLike(tr *netease.Track) {
-	if tr.LocalPath != "" || tr.Source != nil {
+	if heartless(tr) {
 		return
 	}
 	if a.profile == nil {
@@ -55,6 +55,14 @@ func (a *app) toggleProgramLike(id int64) {
 }
 
 // isLiked reports whether the listener likes tr, a song or an episode.
+// heartless reports whether tr is a file NetEase knows no song of, which
+// has no heart there: one put in a folder by hand. A song downloaded, or a
+// file found on NetEase, is NetEase's song still, and can be liked, as in
+// NetEase's own apps (1.3.9 gave no heart to any file).
+func heartless(tr *netease.Track) bool {
+	return tr.Source != nil || tr.LocalPath != "" && tr.ID <= 0
+}
+
 func (a *app) isLiked(tr *netease.Track) bool {
 	if tr.ProgramID != 0 {
 		return a.likedPrograms[tr.ProgramID]
@@ -66,7 +74,7 @@ func (a *app) isLiked(tr *netease.Track) bool {
 // keyboard (⌘D), which shows no heart: a toast says which it did.
 func (a *app) likeCurrent() {
 	tr := a.pl.Current()
-	if tr == nil || tr.LocalPath != "" {
+	if tr == nil || heartless(tr) {
 		return
 	}
 	a.toggleLike(tr)
@@ -159,8 +167,8 @@ func (a *app) likeButton(c *ui.Context, tr *netease.Track, size float32, color u
 }
 
 func (a *app) heartButton(c *ui.Context, tr *netease.Track, size float32, color, likedColor ui.Color, outline, filled *ui.SVG) ui.Element {
-	// A file on disk has no heart at NetEase.
-	if tr.LocalPath != "" || tr.Source != nil {
+	// A file NetEase knows nothing of has no heart there.
+	if heartless(tr) {
 		return ui.Box(c).Size(size+16, size+16)
 	}
 	if tr.ProgramID != 0 {

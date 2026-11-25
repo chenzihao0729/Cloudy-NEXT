@@ -238,7 +238,7 @@ func (a *app) trayCommands() [][]trayCommand {
 			{icon: playIcon, label: playLabel, disabled: tr == nil, run: a.pl.TogglePlay},
 			{icon: iconPrev, label: "上一首", disabled: tr == nil, run: a.pl.Prev},
 			{icon: iconNext, label: "下一首", disabled: tr == nil, run: a.pl.Next},
-			{icon: heart, label: likeLabel, disabled: tr == nil || tr.LocalPath != "", run: a.likeCurrent},
+			{icon: heart, label: likeLabel, disabled: tr == nil || heartless(tr), run: a.likeCurrent},
 		},
 		{
 			{icon: iconLyrics, label: "桌面歌词", status: lyricsState, run: a.toggleDeskLyrics},

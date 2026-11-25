@@ -91,6 +91,15 @@ func (a *app) setCacheFolder(dir string) {
 			a.measureCache()
 		}()
 	}
+	// The pictures go along, into a folder of their own beside the songs'.
+	if disk := a.art.disk; disk != nil {
+		to := otherCacheDir(dir)
+		a.otherUsed = 0
+		go func() {
+			disk.SetDir(to)
+			a.measureOtherCache()
+		}()
+	}
 	if dir == "" {
 		a.toast = "歌曲缓存已恢复到默认位置"
 	} else {
@@ -140,6 +149,46 @@ func (a *app) measureCache() {
 	}()
 }
 
+// applyOtherCacheLimit gives the pictures' pool the limit the settings say.
+func (a *app) applyOtherCacheLimit() {
+	if disk := a.art.disk; disk != nil {
+		limit := int64(a.settings.OtherCacheMB) << 20
+		go func() {
+			disk.SetLimit(limit)
+			a.measureOtherCache()
+		}()
+	}
+}
+
+// measureOtherCache finds how much the pictures' pool takes, on a
+// goroutine, for the settings to show.
+func (a *app) measureOtherCache() {
+	disk := a.art.disk
+	if disk == nil {
+		return
+	}
+	go func() {
+		n := disk.Size()
+		a.post(func() {
+			a.otherUsed = n
+			if a.settingsView.open {
+				a.redraw()
+			}
+		})
+	}()
+}
+
+// clearOtherCache drops the pictures kept on disk; those shown stay.
+func (a *app) clearOtherCache() {
+	if disk := a.art.disk; disk != nil {
+		a.otherUsed = 0
+		go func() {
+			disk.Clear()
+			a.measureOtherCache()
+		}()
+	}
+}
+
 func (a *app) clearCache() {
 	if cache := a.pl.Cache; cache != nil {
 		a.cacheUsed = 0
@@ -151,8 +200,11 @@ func (a *app) clearCache() {
 }
 
 // cacheUsage says how much the cache takes, once measured.
-func (a *app) cacheUsage() string {
-	switch n := a.cacheUsed; {
+func (a *app) cacheUsage() string { return usage(a.cacheUsed) }
+
+// usage says how much n bytes of a cache are, -1 not yet measured.
+func usage(n int64) string {
+	switch {
 	case n < 0:
 		return "正在计算已用空间…"
 	case n >= 1<<30:

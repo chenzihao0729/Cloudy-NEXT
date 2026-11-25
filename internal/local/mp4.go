@@ -10,10 +10,10 @@ import (
 // Playable reports whether a file with extension ext (".mp3") is one the
 // player plays: MP3 and FLAC, and since 1.3.3 AAC (in an M4A or bare, and
 // ALAC in an M4A, which Windows decodes) and DSD (DSF and DSDIFF), and
-// WAV (#54).
+// WAV (#54), and since 1.3.10 AIFF and WMA, which Windows decodes (#65).
 func Playable(ext string) bool {
 	switch strings.ToLower(ext) {
-	case ".mp3", ".flac", ".wav", ".m4a", ".m4b", ".aac", ".dsf", ".dff":
+	case ".mp3", ".flac", ".wav", ".m4a", ".m4b", ".aac", ".dsf", ".dff", ".aif", ".aiff", ".aifc", ".wma":
 		return true
 	}
 	return false

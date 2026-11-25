@@ -15,17 +15,26 @@ type deskState struct {
 	placed    mygo.Point    // where placeDesk last put the window
 	placedSet bool          // and the window hasn't been moved since
 	near      bool          // the pointer is over the locked lyrics
-	hot       bool          // over their unlock button, which takes it
-	unlockAt  ui.Rect       // that button, in the window, while it shows
-	covered   bool          // something full screen is in front
-	checked   time.Time     // when that was last asked
-	idle      bool          // nothing plays, and they hide then
-	idleSince time.Time     // when nothing has played since, or zero
-	vertical  bool          // the window is made standing up
+	// unlockWin is the button that unlocks locked lyrics, in a window of
+	// its own over theirs while the pointer is over them, and unlockSince
+	// when it last showed, for it to come in.
+	unlockWin   *mygo.Window
+	unlockSince time.Time
+	covered     bool      // something full screen is in front
+	checked     time.Time // when that was last asked
+	idle        bool      // nothing plays, and they hide then
+	idleSince   time.Time // when nothing has played since, or zero
+	vertical    bool      // the window is made standing up
 	// moreAt is the tools' more button, in the window; moreWin the panel
 	// it opens, and moreShut when that last closed.
-	moreAt   ui.Rect
-	bodyAt   ui.Rect // the lyrics, lying or standing, in the window
+	moreAt ui.Rect
+	bodyAt ui.Rect // the lyrics, lying or standing, in the window
+	// toolsAt is the tools' capsule over unlocked lyrics, in the window,
+	// over whether the pointer is over the lyrics, which shows it; through
+	// that the window lets the pointer through, being away from both.
+	toolsAt  ui.Rect
+	over     bool
+	through  bool
 	moreWin  *mygo.Window
 	moreShut time.Time
 	more     deskMore
@@ -59,14 +68,16 @@ func (a *app) stopDeskWatch() {
 		close(a.desk.stop)
 		a.desk.stop = nil
 	}
-	a.desk.near, a.desk.hot, a.desk.covered, a.desk.idle = false, false, false, false
+	a.desk.near, a.desk.covered, a.desk.idle = false, false, false
 	a.desk.idleSince = time.Time{}
+	a.dropFloat(&a.desk.unlockWin)
 }
 
 // deskTick is a tick of watchDesk, on the main thread.
 func (a *app) deskTick() {
 	w := a.deskWin
 	if w == nil || a.desk.stop == nil {
+		a.showDeskUnlock(false)
 		return
 	}
 	s := &a.settings
@@ -89,27 +100,107 @@ func (a *app) deskTick() {
 			a.applyDeskLyrics()
 		}
 	}
-	if !s.DeskLock || !w.IsVisible() {
+	if !w.IsVisible() || !s.DeskLock || a.deskFly.win != nil {
 		a.desk.near = false
+		a.showDeskUnlock(false)
+		if w.IsVisible() && !s.DeskLock {
+			a.deskPassAround(w)
+		}
 		return
 	}
 	p := mygo.Screen.CursorScreenPoint()
 	b := w.Bounds()
-	in := func(x, y, w, h float32) bool {
-		px, py := float32(p.X), float32(p.Y)
-		return px >= x && py >= y && px < x+w && py < y+h
+	in := func(r mygo.Rectangle) bool {
+		return p.X >= r.X && p.Y >= r.Y && p.X < r.X+r.Width && p.Y < r.Y+r.Height
 	}
-	near := in(float32(b.X), float32(b.Y), float32(b.Width), float32(b.Height))
-	u := a.desk.unlockAt
-	hot := near && u.W > 0 && in(float32(b.X)+u.X, float32(b.Y)+u.Y, u.W, u.H)
-	if hot != a.desk.hot {
-		// The window takes the pointer over the button alone, for it to
-		// be clicked; everywhere else it goes through to what is under.
-		a.desk.hot = hot
-		w.SetIgnoreMouseEvents(!hot)
+	near := in(b)
+	if u := a.desk.unlockWin; u != nil && u.IsVisible() && in(u.Bounds()) {
+		near = true // over the button, which may reach past the window
 	}
-	if near != a.desk.near {
-		a.desk.near = near
+	a.desk.near = near
+	a.showDeskUnlock(near)
+}
+
+// deskUnlockSize is how large the unlock button's window is: the button,
+// and room for its shadow.
+const deskUnlockSize = 52
+
+// showDeskUnlock shows the button that unlocks locked lyrics, over them
+// where their tools are, or hides it. The lyrics' window lets the pointer
+// through all the while; the button has a window of its own, which takes
+// it. The lyrics' window took the pointer itself over where the button
+// showed in it, as a clock found it there: a click just as the pointer
+// got there, or before the button had been laid out, went through to what
+// was under it, and the button could not be pressed (1.3.9).
+func (a *app) showDeskUnlock(on bool) {
+	u := a.desk.unlockWin
+	if !on {
+		if u != nil && u.IsVisible() {
+			u.Hide()
+		}
+		return
+	}
+	b := a.deskWin.Bounds()
+	x := b.X + b.Width/2 - deskUnlockSize/2
+	y := b.Y + deskToolsRoom - 20 - deskUnlockSize/2
+	if u == nil {
+		u = a.floatWindow(" 解锁桌面歌词", x, y, deskUnlockSize, deskUnlockSize, a.deskUnlockView, func() {
+			a.showDeskUnlock(false)
+		})
+		showAtOnce(u.NativeHandle())
+		a.desk.unlockWin = u
+	}
+	if u.IsVisible() {
+		if ub := u.Bounds(); ub.X != x || ub.Y != y {
+			u.SetPosition(x, y)
+		}
+		return
+	}
+	a.desk.unlockSince = time.Now()
+	u.Show()
+	// A flyout shows by its anchor: over the lyrics, and over them in
+	// front, both always on top.
+	u.SetPosition(x, y)
+	u.SetAlwaysOnTop(true)
+	u.Invalidate()
+}
+
+// deskHitPad is how far around the lyrics, and their tools, unlocked lyrics
+// take the pointer.
+const deskHitPad = 12
+
+// deskPassAround lets the pointer through unlocked lyrics' window where
+// nothing of them shows: the window is far larger than the line it shows,
+// and clear all around it, which took the clicks meant for what is under
+// it, the player bar's own buttons or the taskbar (1.3.9). Over the lyrics,
+// or their tools while they show, the window takes the pointer, to be
+// dragged, or its tools pressed. Off a clock, as the locked lyrics' unlock
+// button is: the window hears nothing of the pointer while it lets it by.
+func (a *app) deskPassAround(w *mygo.Window) {
+	if a.deskFly.win != nil {
+		return // the flight has the window let it through, or not
+	}
+	live := a.desk.bodyAt
+	if live.W <= 0 {
+		return // not laid out yet
+	}
+	if t := a.desk.toolsAt; a.desk.over && t.W > 0 {
+		live = unionRect(live, t)
+	}
+	p := mygo.Screen.CursorScreenPoint()
+	b := w.Bounds()
+	x, y := float32(p.X-b.X), float32(p.Y-b.Y)
+	in := x >= live.X-deskHitPad && y >= live.Y-deskHitPad && x < live.X+live.W+deskHitPad && y < live.Y+live.H+deskHitPad
+	if through := !in; through != a.desk.through {
+		a.desk.through = through
+		w.SetIgnoreMouseEvents(through)
 		w.Invalidate()
 	}
+}
+
+// unionRect returns the least rectangle holding a and b.
+func unionRect(a, b ui.Rect) ui.Rect {
+	x0, y0 := min(a.X, b.X), min(a.Y, b.Y)
+	x1, y1 := max(a.X+a.W, b.X+b.W), max(a.Y+a.H, b.Y+b.H)
+	return ui.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
 }

@@ -112,8 +112,12 @@ func (a *app) queueRows(c *ui.Context, list *ui.ListState, at *int, look queueLo
 				}
 			})
 		})
-		if row.DoubleClicked() && canPlay && !playing {
-			pl.Jump(i)
+		if row.DoubleClicked() && !playing {
+			if canPlay {
+				pl.Jump(i)
+			} else {
+				a.playGrey([]netease.Track{*tr}, 0, func() { pl.Jump(i) })
+			}
 		}
 	}).Grow(1).Padding(8, 0, 40, 0).Gap(2)
 }

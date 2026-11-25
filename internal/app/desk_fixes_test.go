@@ -20,24 +20,22 @@ func deskTestApp(text string) *app {
 	return a
 }
 
-// A line too long for the desktop lyrics shows smaller, or as small as it
-// goes and sliding as it is sung: it was cut to its start and an ellipsis,
-// then went on two lines.
+// A line too long for the desktop lyrics slides as it is sung, at its own
+// size: it was cut to its start and an ellipsis, then went on two lines,
+// then was made smaller first (1.3.9).
 func TestDeskLongLineFits(t *testing.T) {
 	long := strings.Repeat("我曾经跨过山和大海也穿过人山人海", 2)
 	longer := strings.Repeat("我曾经跨过山和大海也穿过人山人海", 4)
 	for _, text := range []string{long, longer} {
 		a := deskTestApp(text)
 		main, _ := a.deskLines()
-		if main.size >= 32 {
-			t.Errorf("%d runes: still at %v", len([]rune(text)), main.size)
+		if main.size != 32 || !main.scroll {
+			t.Errorf("%d runes: at %v, sliding %v", len([]rune(text)), main.size, main.scroll)
 		}
-		w, _ := a.deskShape(main, deskLook{}, 0, false).Size()
-		if !main.scroll && w > deskRoom {
-			t.Errorf("%d runes: on one line %v wide, in %v, not sliding", len([]rune(text)), w, deskRoom)
-		}
-		if main.scroll && main.size < 32*deskScrollShrink-0.01 {
-			t.Errorf("%d runes: sliding at %v, smaller than it needs", len([]rune(text)), main.size)
+		// Standing too.
+		a.settings.DeskVertical = true
+		if main, _ := a.deskLines(); main.size != 32 || !main.scroll {
+			t.Errorf("%d runes standing: at %v, sliding %v", len([]rune(text)), main.size, main.scroll)
 		}
 	}
 	if main, _ := deskTestApp("夜空中最亮的星").deskLines(); main.size != 32 || main.scroll {
@@ -101,12 +99,14 @@ func TestDeskDrawsWhenLyricsChange(t *testing.T) {
 func TestDeskUnlocksFromItsButton(t *testing.T) {
 	a := deskTestApp("夜空中最亮的星")
 	a.settings.DeskLyrics, a.settings.DeskLock = true, true
-	tt := ui.NewTester(a.deskView, deskW, deskH)
-	tt.Frame()
-	if _, ok := tt.Find("解锁桌面歌词"); ok {
-		t.Fatal("the unlock button shows with the pointer away")
+	// The lyrics' window lets the pointer through: the button has a window
+	// of its own, which takes it (1.3.10).
+	lyrics := ui.NewTester(a.deskView, deskW, deskH)
+	lyrics.Frame()
+	if _, ok := lyrics.Find("解锁桌面歌词"); ok {
+		t.Fatal("the unlock button shows in the window letting the pointer through")
 	}
-	a.desk.near = true
+	tt := ui.NewTester(a.deskUnlockView, deskUnlockSize, deskUnlockSize)
 	tt.Frame()
 	if err := tt.Click("解锁桌面歌词"); err != nil {
 		t.Fatal(err)

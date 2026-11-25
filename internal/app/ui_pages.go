@@ -586,9 +586,11 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 				}
 			}
 			// A liked song's heart shows; the others' as the pointer is on them.
+			// A downloaded song, NetEase's still, has one too (1.3.10); a
+			// file NetEase knows nothing of keeps the room, its row in line.
 			if !batch {
 				ui.Box(c).Size(32, 32).Center().Children(func() {
-					if tr.LocalPath == "" && tr.Source == nil && (a.liked[tr.ID] || hovered) {
+					if !heartless(tr) && (a.liked[tr.ID] || hovered) {
 						a.likeButton(c.Key("like"), tr, 15, p.muted)
 					}
 				})
@@ -597,11 +599,19 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 		})
 		if batch && row.Clicked() {
 			a.toggleBatch(tr.ID)
-		} else if !batch && row.DoubleClicked() && canPlay {
-			if a.route.page == pageSearch {
-				a.pl.PlayNow(*tr)
+		} else if !batch && row.DoubleClicked() {
+			search := a.route.page == pageSearch
+			play := func() {
+				if search {
+					a.pl.PlayNow(tracks[i])
+				} else {
+					a.pl.PlayQueue(tracks, i)
+				}
+			}
+			if canPlay {
+				play()
 			} else {
-				a.pl.PlayQueue(tracks, i)
+				a.playGrey(tracks, i, play)
 			}
 		}
 	}

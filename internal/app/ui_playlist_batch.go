@@ -108,7 +108,7 @@ func (a *app) setLikedAll(tracks []netease.Track, like bool) {
 	edits := map[int64]*likeEdit{}
 	var ids []int64
 	for _, tr := range tracks {
-		if tr.LocalPath != "" || tr.ProgramID != 0 || tr.ID == 0 || seen[tr.ID] || a.liked[tr.ID] == like {
+		if heartless(&tr) || tr.ProgramID != 0 || tr.ID <= 0 || seen[tr.ID] || a.liked[tr.ID] == like {
 			continue
 		}
 		seen[tr.ID] = true

@@ -77,7 +77,7 @@ func openLink(url string) {
 }
 
 const (
-	splashTime = 1150 * time.Millisecond
+	splashTime = 2500 * time.Millisecond
 	splashDisc = 168
 )
 

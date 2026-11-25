@@ -196,6 +196,14 @@ func (a *app) removeComment(id int64) {
 			break
 		}
 	}
+	// One of the listener's own among the popular ones goes from there too,
+	// for good: they come back with the next load if NetEase keeps it.
+	for i := range cs.hot {
+		if cs.hot[i].ID == id {
+			cs.hot = append(cs.hot[:i:i], cs.hot[i+1:]...)
+			break
+		}
+	}
 	go func() {
 		err := deleteComment(thread, id)
 		a.post(func() {

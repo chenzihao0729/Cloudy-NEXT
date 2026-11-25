@@ -153,7 +153,9 @@ func TestPlaylistBatchInlineDownload(t *testing.T) {
 	a.cancelDownload()
 }
 
-// A batch like sends one request per unliked song and fills their hearts.
+// A batch like sends one request per unliked song and fills their hearts:
+// a downloaded one too, NetEase's song still (1.3.10); a file of the
+// listener's own, which NetEase knows nothing of, not.
 func TestPlaylistBatchLikes(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
@@ -161,25 +163,30 @@ func TestPlaylistBatchLikes(t *testing.T) {
 	a.liked = map[int64]bool{1: true}
 	oldPause, oldLike := batchLikePause, likeSong
 	batchLikePause = 0
-	calls := make(chan int64, 2)
+	calls := make(chan int64, 4)
 	likeSong = func(id int64, like bool) error { calls <- id; return nil }
 	defer func() {
 		batchLikePause, likeSong = oldPause, oldLike
 	}()
-	a.likeAll([]netease.Track{{ID: 1}, {ID: 2}, {ID: 2}, {ID: 3}, {ID: 4, LocalPath: `C:\4.mp3`}})
-	got := make([]int64, 0, 2)
-	for len(got) < 2 {
+	a.likeAll([]netease.Track{{ID: 1}, {ID: 2}, {ID: 2}, {ID: 3}, {ID: 4, LocalPath: `C:\4.mp3`}, {ID: -5, LocalPath: `C:\5.mp3`}})
+	got := make([]int64, 0, 3)
+	for len(got) < 3 {
 		select {
 		case id := <-calls:
 			got = append(got, id)
 		case <-time.After(time.Second):
-			t.Fatalf("liked %v, want 2 and 3", got)
+			t.Fatalf("liked %v, want 2, 3 and 4", got)
 		}
 	}
-	if got[0] != 2 || got[1] != 3 {
-		t.Fatalf("liked %v, want 2 and 3", got)
+	if got[0] != 2 || got[1] != 3 || got[2] != 4 {
+		t.Fatalf("liked %v, want 2, 3 and 4", got)
 	}
-	if !a.liked[2] || !a.liked[3] || a.liked[4] {
+	select {
+	case id := <-calls:
+		t.Fatalf("liked %d too", id)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if !a.liked[2] || !a.liked[3] || !a.liked[4] || a.liked[-5] {
 		t.Fatalf("liked map %v", a.liked)
 	}
 }

@@ -21,7 +21,7 @@ func TestSplashPaintsOnlyAndEnds(t *testing.T) {
 	tt.Frame()
 	before := builds
 	var shots []image.Image
-	for ms := 0; ms <= 1300; ms += 16 {
+	for ms := 0; ms <= int(splashTime/time.Millisecond)+160; ms += 16 {
 		tt.Advance(16 * time.Millisecond)
 		if tt.FramePending() {
 			tt.Frame()

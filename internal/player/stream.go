@@ -877,6 +877,11 @@ func openStream(dl *download, durationMs int64) (stream, error) {
 			return s, nil
 		}
 		return nil, &UnsupportedError{Format: format}
+	} else if format == "AIFF" {
+		if s, err := openAIFFStream(dl); err == nil {
+			return s, nil
+		}
+		return nil, &UnsupportedError{Format: format}
 	} else if format == "DSD" {
 		if s, err := openDSDStream(dl); err == nil {
 			return s, nil
@@ -920,6 +925,8 @@ func otherFormat(head []byte) string {
 		return "无损压缩（APE/WV）"
 	case len(head) >= 4 && string(head[:4]) == "DSD ":
 		return "DSD"
+	case len(head) >= 12 && string(head[:4]) == "FORM" && (string(head[8:12]) == "AIFF" || string(head[8:12]) == "AIFC"):
+		return "AIFF"
 	case len(head) >= 4 && string(head[:4]) == "FRM8":
 		return "DSD"
 	case len(head) >= 4 && head[0] == 0x30 && head[1] == 0x26 && head[2] == 0xb2 && head[3] == 0x75:

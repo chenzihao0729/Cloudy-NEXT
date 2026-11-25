@@ -1,7 +1,9 @@
 package app
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/sys/windows"
@@ -60,5 +62,124 @@ func registerOpenWith() error {
 	}
 	// Tell Explorer the associations changed.
 	windows.NewLazySystemDLL("shell32.dll").NewProc("SHChangeNotify").Call(0x08000000, 0, 0, 0)
+	return nil
+}
+
+// openWithRegistered reports whether Cloudy is among the apps that open
+// MP3 or FLAC files: listed by itself, by its installer, or by Windows as
+// one chosen with 「选择其他应用」.
+func openWithRegistered() bool {
+	exists := func(path string) bool {
+		k, err := registry.OpenKey(registry.CURRENT_USER, path, registry.QUERY_VALUE)
+		if err != nil {
+			return false
+		}
+		k.Close()
+		return true
+	}
+	for _, t := range songTypes {
+		prog := appProgID() + "." + t.ext
+		if exists(`Software\Classes\` + prog) {
+			return true
+		}
+		if k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Classes\.`+t.ext+`\OpenWithProgids`, registry.QUERY_VALUE); err == nil {
+			_, _, err := k.GetValue(prog, nil)
+			k.Close()
+			if err == nil {
+				return true
+			}
+		}
+	}
+	if exe, err := os.Executable(); err == nil && exists(`Software\Classes\Applications\`+filepath.Base(exe)) {
+		return true
+	}
+	return false
+}
+
+// unregisterOpenWith takes Cloudy out of the apps that open MP3 and FLAC
+// files, for the listener, undoing registerOpenWith and what its installer
+// and Windows' own 「选择其他应用」 added: its file types, its place in each
+// extension's list, and Windows' note of the app. Being the default stays
+// the system's to change: Windows lets no app change that.
+func unregisterOpenWith() error {
+	var first error
+	keep := func(err error) {
+		if err != nil && !errors.Is(err, registry.ErrNotExist) && first == nil {
+			first = err
+		}
+	}
+	exe, _ := os.Executable()
+	name := filepath.Base(exe)
+	for _, t := range songTypes {
+		prog := appProgID() + "." + t.ext
+		keep(deleteKeyTree(registry.CURRENT_USER, `Software\Classes\`+prog))
+		for _, list := range []string{
+			`Software\Classes\.` + t.ext + `\OpenWithProgids`,
+			`Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.` + t.ext + `\OpenWithProgids`,
+		} {
+			if k, err := registry.OpenKey(registry.CURRENT_USER, list, registry.SET_VALUE); err == nil {
+				keep(k.DeleteValue(prog))
+				k.Close()
+			}
+		}
+		if name != "" {
+			keep(dropFromOpenWithList(`Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.`+t.ext+`\OpenWithList`, name))
+		}
+	}
+	if name != "" {
+		keep(deleteKeyTree(registry.CURRENT_USER, `Software\Classes\Applications\`+name))
+	}
+	// Tell Explorer the associations changed.
+	windows.NewLazySystemDLL("shell32.dll").NewProc("SHChangeNotify").Call(0x08000000, 0, 0, 0)
+	return first
+}
+
+// deleteKeyTree deletes the key at path under root and all under it.
+func deleteKeyTree(root registry.Key, path string) error {
+	k, err := registry.OpenKey(root, path, registry.ENUMERATE_SUB_KEYS|registry.QUERY_VALUE)
+	if err != nil {
+		return err
+	}
+	subs, err := k.ReadSubKeyNames(-1)
+	k.Close()
+	if err != nil {
+		return err
+	}
+	for _, s := range subs {
+		if err := deleteKeyTree(root, path+`\`+s); err != nil {
+			return err
+		}
+	}
+	return registry.DeleteKey(root, path)
+}
+
+// dropFromOpenWithList takes the app named name (its .exe's name) out of
+// the list Windows keeps of the apps a type was opened with: its letter,
+// in the values and in the order, MRUList, that names them.
+func dropFromOpenWithList(path, name string) error {
+	k, err := registry.OpenKey(registry.CURRENT_USER, path, registry.QUERY_VALUE|registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+	letters, err := k.ReadValueNames(-1)
+	if err != nil {
+		return err
+	}
+	mru, _, _ := k.GetStringValue("MRUList")
+	for _, l := range letters {
+		if len(l) != 1 {
+			continue
+		}
+		if v, _, err := k.GetStringValue(l); err == nil && strings.EqualFold(v, name) {
+			if err := k.DeleteValue(l); err != nil {
+				return err
+			}
+			mru = strings.ReplaceAll(mru, l, "")
+		}
+	}
+	if mru != "" {
+		return k.SetStringValue("MRUList", mru)
+	}
 	return nil
 }
