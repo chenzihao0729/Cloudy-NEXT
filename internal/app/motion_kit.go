@@ -173,6 +173,11 @@ type growSpec struct {
 	guess      float32 // how tall it is before its content has been laid out
 	radius     float32
 	onDark     bool
+	// rest, if set, keeps the content at the bottom of the pane, in a
+	// body this tall, rather than at its top: a pane risen from its
+	// button, whose height eases as its content changes, then moves its
+	// top edge only, its content still.
+	rest float32
 }
 
 // growRect is the pane of s, k of the way from what opened it, and its
@@ -221,7 +226,9 @@ func (a *app) growPane(c *ui.Context, s growSpec, fill func(body ui.Element)) (s
 	shape.Children(func() {
 		shown := accountShown(s.k, s.open)
 		body = ui.Column(c.Key(s.key + "-body")).Absolute().Left(full.X - rect.X).Top(full.Y - rect.Y).Width(full.W)
-		if s.full.H > 0 {
+		if s.full.H > 0 && s.rest > full.H {
+			body.Top(full.Y + full.H - s.rest - rect.Y).Height(s.rest).Justify(ui.End)
+		} else if s.full.H > 0 {
 			body.Height(full.H)
 		}
 		if shown < 1 {

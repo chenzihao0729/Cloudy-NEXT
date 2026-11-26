@@ -605,7 +605,7 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 				if search {
 					a.pl.PlayNow(tracks[i])
 				} else {
-					a.pl.PlayQueue(tracks, i)
+					a.playPicked(tracks, i)
 				}
 			}
 			if canPlay {

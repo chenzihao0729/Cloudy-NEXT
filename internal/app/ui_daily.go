@@ -432,7 +432,7 @@ func (a *app) dailyPicks(c *ui.Context, songs []netease.Track, ours bool) {
 				if current {
 					a.pl.TogglePlay()
 				} else {
-					a.pl.PlayQueue(songs, i)
+					a.playPicked(songs, i)
 				}
 			}
 		}

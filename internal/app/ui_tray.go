@@ -26,7 +26,7 @@ const (
 
 // trayGlass reports whether the tray menu is glass: it follows 界面玻璃 (or
 // global glass), as the app's own menus do.
-var trayGlass = func(a *app) bool { return a.settings.panelGlass() }
+var trayGlass = func(a *app) bool { return a.settings.glassIn(sceneMenu) }
 
 // The platform's parts, replaced in tests: where the icon right-clicked is,
 // and a copy of the screen under the menu for its glass.

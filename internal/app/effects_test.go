@@ -69,7 +69,6 @@ func TestEffectsFrames(t *testing.T) {
 			a.settings.Effects.Bands[5] = 3.5
 			a.settings.EffectsPreset = customPreset
 			a.effects.open = true
-			a.effects.page = page
 			if page == 0 {
 				a.settings.EffectsPreset, a.auto.note = smartPreset, "已识别曲风：流行-华语流行"
 				a.settings.Effects.Spatial, a.settings.Effects.Orbit = "8d", 0.5

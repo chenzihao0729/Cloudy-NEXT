@@ -683,7 +683,7 @@ func (a *app) analysisPane(c *ui.Context, tr *netease.Track, art *artwork, accen
 // and reports whether it did. With no glass (界面玻璃 off, saving power,
 // the desktop asking for opaque), the card paints its own (anCard).
 func (a *app) anSurface(e ui.Element, s, basis float32) bool {
-	if !a.settings.panelGlass() {
+	if !a.settings.glassIn(sceneAnalysis) {
 		return false
 	}
 	e.Radius(34*s).Shadow(0, 18*s, 48*s, 0, ui.RGBA(0, 0, 0, 0.22))

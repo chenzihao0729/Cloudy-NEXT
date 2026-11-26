@@ -324,6 +324,17 @@ func longTime(d time.Duration) string {
 	return fmt.Sprintf("%d 小时 %d 分钟", m/60, m%60)
 }
 
+// playPicked plays the song at i of a list it was clicked in: the list as
+// the queue, or, as the settings choose, the song alone after the one
+// playing, as a song searched for always does.
+func (a *app) playPicked(tracks []netease.Track, i int) {
+	if a.settings.ClickAdds {
+		a.pl.PlayNow(tracks[i])
+		return
+	}
+	a.pl.PlayQueue(tracks, i)
+}
+
 // playList plays tracks from the first that can, shuffled or not.
 func (a *app) playList(tracks []netease.Track, shuffled bool) {
 	if shuffled {

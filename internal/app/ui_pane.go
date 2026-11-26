@@ -63,10 +63,8 @@ func (a *app) paneSurfaceAt(e ui.Element, radius float32, onDark bool, basis flo
 	e.Radius(radius)
 	dark := onDark || a.pal.dark
 	switch {
-	case !a.settings.panelGlass() && dark:
-		return e.Background(ui.Hex("#232327")).Border(0.5, white.Alpha(0.12))
-	case !a.settings.panelGlass():
-		return e.Background(ui.Hex("#f6f6f8")).Border(0.5, ui.RGBA(0, 0, 0, 0.12))
+	case !a.settings.glassIn(scene):
+		return a.plainPane(e, onDark)
 	case !a.settings.frosted(scene):
 		return e.Material(a.paneGlass(dark, basis, scene))
 	}
@@ -93,8 +91,12 @@ type menuAction struct {
 	title, note string
 	icon        *ui.SVG
 	checked     bool
-	do          func()
-	sub         [][]menuAction
+	tag         string // the membership it needs, marked as NetEase marks it: "VIP" or "SVIP"
+	// locked, if set, says why it cannot be chosen: it shows dimmed, and a
+	// press says so, keeping the menu open.
+	locked string
+	do     func()
+	sub    [][]menuAction
 }
 
 // paneMenu is the menu open, one at a time, in a pane of its own over all:
@@ -115,6 +117,10 @@ type paneMenu struct {
 	from     ui.Rect   // what it grows out of: its button, or a little of itself round the pointer
 	fromR    float32   // the corner radius of from
 	source   uint64    // the element pressed for it with the secondary button, which keeps its hover
+	natural  float32   // how tall the page showing is, laid out, for the pane to ease to as pages change
+	rise     bool      // it opened upward from up, chosen as it opened
+	page     string    // the page showing: "" the menu, else the label of its sub
+	pageAt   time.Time // when page came, for the page coming in to wait for the one going
 }
 
 // menuSearchFrom is how many rows a menu's list has for a search over it:
@@ -281,7 +287,12 @@ func (a *app) menuOverlay(c *ui.Context) {
 		}
 		x, y = min(max(m.x, 8), w-menuWidth-8), m.y
 		tall := m.height(h)
-		if y+tall > h-8 {
+		if m.at.W == 0 {
+			// Up or down is chosen once, as it opens: a page of it
+			// taller or shorter keeps the side it opened to.
+			m.rise = y+tall > h-8
+		}
+		if m.rise {
 			y = max(m.up-tall, 8)
 		}
 		if g := a.growKeep("menu"); g.h > 0 && m.at.W > 0 {
@@ -303,34 +314,73 @@ func (a *app) menuOverlay(c *ui.Context) {
 		}
 	}
 	ui.Overlay(c, func() {
-		spec := growSpec{key: "menu", k: k, open: m.open, from: m.from, fromRadius: m.fromR, full: ui.Rect{X: x, Y: y, W: menuWidth}, guess: m.at.H, radius: 20, onDark: m.onDark}
+		// Its height eases to the page showing, once it is open: a list in
+		// it is taller or shorter than the menu.
+		fullH := float32(0)
+		if m.natural > 0 {
+			hv := ui.Box(c.Key("menu-height")).Absolute().Size(0, 0)
+			if k < 1 || !m.open {
+				hv.Jump("h", m.natural)
+			}
+			fullH = hv.AnimateTo("h", m.natural, motionPane)
+			if m.open {
+				// Placed by the height on its way, not the page's: risen
+				// from its button, its top would jump to where a page
+				// shorter or taller ends while its height still eased.
+				if m.rise {
+					y = max(m.up-fullH, 8)
+				} else {
+					y = max(min(m.y, h-8-fullH), 8)
+				}
+				m.at.Y, m.at.H = y, fullH
+			}
+		}
+		spec := growSpec{key: "menu", k: k, open: m.open, from: m.from, fromRadius: m.fromR, full: ui.Rect{X: x, Y: y, W: menuWidth, H: fullH}, guess: m.at.H, radius: 20, onDark: m.onDark}
+		if m.rise && fullH > 0 {
+			spec.rest = h // its pages rest on its bottom, by its button
+		}
 		shape, _ := a.growPane(c, spec, func(panel ui.Element) {
 			panel.Padding(6).Gap(1).TextColor(ink.text).Role(ui.RoleMenu).FocusGroup(ui.Vertical).Label("菜单")
 			panel.Children(func() {
+				// The menu and a list of it are pages: the list comes in from the
+				// right as the menu goes out to the left, and back the other way.
 				if sub := m.sub; sub != nil {
-					if a.menuRow(c.Key("back"), menuAction{label: "返回", title: sub.label, icon: iconBack}, false, ink).Clicked() {
-						m.sub, m.query = nil, ""
-					}
-					menuLine(c.Key("back-line"), ink)
-					a.menuSearch(c, ink)
-					ui.Scroll(c.Key("menu-list")).MaxHeight(menuListHeight).Gap(1).Children(func() { a.menuGroups(c, matching(sub.sub, m.query), ink) })
+					page := ui.Column(c.Key("menu-page-" + sub.label)).Gap(1).Shrink(0).Transition(menuPage(1))
+					m.measure(page)
+					m.pageIn(page, "sub:"+sub.label)
+					page.Children(func() {
+						if a.menuRow(c.Key("back"), menuAction{label: "返回", title: sub.label, icon: iconBack}, false, ink).Clicked() {
+							m.sub, m.query = nil, ""
+						}
+						menuLine(c.Key("back-line"), ink)
+						a.menuSearch(c, ink)
+						ui.Scroll(c.Key("menu-list")).MaxHeight(menuListHeight).Gap(1).Children(func() { a.menuGroups(c, matching(sub.sub, m.query), ink) })
+					})
 					return
 				}
-				if m.head != nil {
-					m.head(c, ink)
-					menuLine(c.Key("head-line"), ink)
-				}
-				a.menuSearch(c, ink)
-				groups := matching(m.groups, m.query)
-				if room := m.room(h); menuRows(m.groups) > room {
-					ui.Scroll(c.Key("menu-groups")).MaxHeight(room).Gap(1).Children(func() { a.menuGroups(c, groups, ink) })
-				} else {
-					a.menuGroups(c, groups, ink)
-				}
+				page := ui.Column(c.Key("menu-page")).Gap(1).Shrink(0).Transition(menuPage(-1))
+				m.measure(page)
+				m.pageIn(page, "")
+				page.Children(func() {
+					if m.head != nil {
+						m.head(c, ink)
+						menuLine(c.Key("head-line"), ink)
+					}
+					a.menuSearch(c, ink)
+					groups := matching(m.groups, m.query)
+					if room := m.room(h); menuRows(m.groups) > room {
+						ui.Scroll(c.Key("menu-groups")).MaxHeight(room).Gap(1).Children(func() { a.menuGroups(c, groups, ink) })
+					} else {
+						a.menuGroups(c, groups, ink)
+					}
+				})
 			})
 		})
 		if m.open && (shape.PressedOutside() || shape.OverlayShortcut(0, ui.KeyEscape)) {
-			m.open, m.sub, m.query, m.closedAt = false, nil, "", time.Now()
+			// The page showing stays as it goes: put back to the menu's first
+			// page now, it would change pages and height while it shrank.
+			// It opens next at its first page (openMenu).
+			m.open, m.closedAt = false, time.Now()
 		}
 	})
 }
@@ -370,10 +420,14 @@ func (a *app) menuGroups(c *ui.Context, groups [][]menuAction, ink paneInk) {
 		}
 		for _, act := range group {
 			if row := a.menuRow(c, act, act.sub != nil, ink); row.Clicked() {
+				if act.locked != "" {
+					a.toast = act.locked
+					continue
+				}
 				if act.sub != nil {
 					a.menu.sub, a.menu.query = &act, ""
 				} else {
-					a.menu.open, a.menu.sub, a.menu.query = false, nil, ""
+					a.menu.open = false // on the page it was chosen on, as it goes
 					a.pressedFrom(row, 14)
 					act.do()
 				}
@@ -389,6 +443,9 @@ func (a *app) menuRow(c *ui.Context, act menuAction, opens bool, ink paneInk) ui
 		AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
 	bg := ui.Transparent
 	switch {
+	case act.locked != "":
+		// Dimmed, and still: its tooltip says why.
+		b.Opacity(0.42).Tooltip(act.locked)
 	case b.Pressed():
 		bg = ink.press
 	case b.Hovered() || b.FocusVisible():
@@ -404,6 +461,9 @@ func (a *app) menuRow(c *ui.Context, act menuAction, opens bool, ink paneInk) ui
 			ui.Icon(c, act.icon).Size(16, 16).Shrink(0).TextColor(ink.muted)
 		}
 		ui.Text(c, title).FontSize(13.5).FontWeight(500).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+		if act.tag != "" {
+			vipTag(c, act.tag, act.tag == "SVIP")
+		}
 		if act.note != "" {
 			ui.Text(c, act.note).FontSize(12).TextColor(ink.faint).Shrink(0)
 		}
@@ -440,6 +500,7 @@ func (a *app) paneSelect(c *ui.Context, label string, selected *string, options 
 	sel.Trigger.MinWidth(112).MaxWidth(220).Height(32).PaddingX(14).Gap(8).Radius(999).Border(0.5, ink.line).AlignItems(ui.Center).FocusRing(false).Label(label).
 		Background(sel.Trigger.AnimateColor("bg", bg, ui.Animation{Duration: 100 * time.Millisecond})).Children(func() {
 		font(ui.Text(c, *selected).FontSize(13).SingleLine().Grow(1).Shrink(1).MinWidth(0).TextColor(ink.text), *selected)
+		needsTag(c, *selected)
 		ui.Icon(c, iconUpDown).Size(13, 13).Shrink(0).TextColor(ink.faint)
 	})
 	// The list grows out of the button, and goes back into it: the select
@@ -458,6 +519,7 @@ func (a *app) paneSelect(c *ui.Context, label string, selected *string, options 
 					row := item(o).Height(rowH).PaddingX(10).Gap(8).Radius(14).AlignItems(ui.Center)
 					row.Children(func() {
 						font(ui.Text(c, o).FontSize(13).SingleLine().Grow(1).Shrink(1).MinWidth(0), o)
+						needsTag(c, o)
 						if o == *selected {
 							ui.Icon(c, iconCheck).Size(14, 14).Shrink(0).TextColor(a.pal.accent)
 						}
@@ -531,4 +593,44 @@ func (a *app) paneToasts(c *ui.Context) {
 			toast.Root.Children(func() { ui.Text(c, t.Title).FontSize(13).FontWeight(500) })
 		}
 	})
+}
+
+// plainPane paints e as a pane with no glass: solid, with a hairline.
+func (a *app) plainPane(e ui.Element, onDark bool) ui.Element {
+	if onDark || a.pal.dark {
+		return e.Background(ui.Hex("#232327")).Border(0.5, white.Alpha(0.12))
+	}
+	return e.Background(ui.Hex("#f6f6f8")).Border(0.5, ui.RGBA(0, 0, 0, 0.12))
+}
+
+// menuPage is how a page of a menu comes and goes: the menu itself from
+// and to the left (side -1), a list of it from and to the right (side 1),
+// sliding a little as it fades, over the pane's own time.
+func menuPage(side float32) ui.ElementTransition {
+	return ui.ElementTransition{Animation: &motionPane, Position: true,
+		Enter: &ui.Motion{X: 36 * side, Opacity: 1}, Exit: &ui.Motion{X: 36 * side}}
+}
+
+// menuPageIn is how the page coming in fades: once the one going has mostly
+// gone, so that the two are not read through each other.
+var menuPageIn = ui.Animation{Duration: 200 * time.Millisecond, Delay: 90 * time.Millisecond, Ease: motionEase}
+
+// pageIn fades page, named name, in as it takes the place of another page;
+// the menu's first page comes with the pane, as it grows.
+func (m *paneMenu) pageIn(page ui.Element, name string) {
+	if name != m.page {
+		m.page = name
+		page.Jump("in", 0)
+	}
+	if f := page.AnimateTo("in", 1, menuPageIn); f < 1 {
+		page.Opacity(f)
+	}
+}
+
+// measure notes how tall page, the page of m showing, was laid out, with
+// the pane's padding round it.
+func (m *paneMenu) measure(page ui.Element) {
+	if b := page.LayoutBounds(); b.H > 0 {
+		m.natural = b.H + 12
+	}
 }

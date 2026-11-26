@@ -5,7 +5,7 @@ import "github.com/egoist/mygo/ui"
 // Keep text and controls live. Only the plain pane's stable decoration is a
 // bitmap; row entrance, hover and typing cannot invalidate its cached scene.
 func (a *app) privateMessagePane(c *ui.Context, panel ui.Element, content func()) {
-	if a.settings.GlobalGlass || a.settings.panelGlass() {
+	if a.settings.GlobalGlass || a.settings.glassIn(sceneDialog) {
 		a.dialogPane(panel, 26, false)
 		panel.Children(content)
 		return

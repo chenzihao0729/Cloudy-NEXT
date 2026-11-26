@@ -48,7 +48,7 @@ func (a *app) currentEffects() player.Effects {
 		return e
 	}
 	chosen := *a.auto.fx
-	chosen.On, chosen.Spatial, chosen.Orbit = true, e.Spatial, e.Orbit
+	chosen.On, chosen.Spatial, chosen.Orbit, chosen.Room = true, e.Spatial, e.Orbit, e.Room
 	return chosen
 }
 

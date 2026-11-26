@@ -50,6 +50,7 @@ func (a *app) boot() {
 // signedIn shows what is personal to prof, or to nobody.
 func (a *app) signedIn(prof *netease.Profile) {
 	a.accountGen++
+	a.privKnown = nil
 	a.resetPrivateMessages()
 	for _, e := range a.likeEdits {
 		if e.timer != nil {
@@ -60,6 +61,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.trackLayout = trackRowLayout{}
 	a.cancelRadioStart()
 	a.profile = prof
+	a.loadMemberships(prof)
 	// Playback picks up where it was left, once the session that lets
 	// the listener play their songs is back.
 	a.restoreSession()
@@ -425,7 +427,11 @@ func (a *app) accountRow(c *ui.Context) {
 func (a *app) accountRowContent(c *ui.Context, prof *netease.Profile) {
 	p := a.pal
 	a.avatar(c, prof.AvatarURL, 26, p.press)
-	ui.Text(c, prof.Nickname).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+	ui.Text(c, prof.Nickname).FontSize(13).FontWeight(600).SingleLine().Shrink(1).MinWidth(0)
+	if len(a.vip) > 0 {
+		memberTag(c, a.vip[0], true)
+	}
+	ui.Box(c).Grow(1)
 	ui.Icon(c, iconUpDown).Size(13, 13).TextColor(p.faint)
 }
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/audio"
@@ -172,9 +173,25 @@ func anyTimed(lines []lyrics.Line) bool {
 	return false
 }
 
+// CoverSize is how many pixels across the cover the system's media
+// controls get is (Windows' SMTC, and the wallpapers and widgets that read
+// it): 0 as NetEase keeps it, which may be thousands across.
+var CoverSize atomic.Int32
+
+func init() { CoverSize.Store(600) }
+
+// coverURL is where the cover of t for the media controls is, at CoverSize.
+func coverURL(t netease.Track) string {
+	pic := t.Album.PicURL
+	if n := int(CoverSize.Load()); n > 0 {
+		return netease.Sized(pic, n)
+	}
+	return strings.Replace(pic, "http://", "https://", 1)
+}
+
 // fetchCover fetches a track's cover; tests keep it off the network.
 var fetchCover = func(t netease.Track) ([]byte, error) {
-	return netease.Fetch(netease.Sized(t.Album.PicURL, 600))
+	return netease.Fetch(coverURL(t))
 }
 
 // watchEnd tells nearEnd, while out plays its last stretch, how much of it

@@ -447,8 +447,10 @@ func (a *app) materialGroup(c *ui.Context, k *settingsKit) {
 				return
 			case materialFlat:
 				s.GlobalGlass, s.SidebarGlass, s.MainGlass, s.LiquidGlass, s.GlassPanels = false, false, false, false, false
+				s.MenuPlain, s.DialogPlain, s.AnalysisPlain = false, false, false
 			case materialCover:
 				s.GlobalGlass, s.SidebarGlass, s.MainGlass, s.LiquidGlass, s.GlassPanels = false, true, true, true, true
+				s.MenuPlain, s.DialogPlain, s.AnalysisPlain = false, false, false
 				a.leavePowerSaver()
 				if a.chosenAccent() != "" {
 					a.toast = "已改用封面色背景，所选主题色将不再显示"
@@ -498,37 +500,95 @@ func (a *app) materialGroup(c *ui.Context, k *settingsKit) {
 			k.sub(c, "主界面封面色背景", "", true, func() {
 				part("main-glass", "主界面封面色背景", &s.MainGlass, coverOn(&s.MainGlass))
 			})
-			k.sub(c, "玻璃播放栏", "悬浮在页面上的玻璃胶囊", true, func() {
-				part("liquid-glass", "玻璃播放栏", &s.LiquidGlass, a.leavePowerSaver)
+			k.sub(c, "圆角悬浮播放栏", "播放栏浮在页面上，四角圆润；关闭后贴着窗口底边", true, func() {
+				floats := !s.BarDocked
+				k.toggle(c, "bar-floats", "圆角悬浮播放栏", &floats, false, func() { s.BarDocked = !floats })
 			})
-			k.sub(c, "界面玻璃", "菜单、弹窗和设置面板使用玻璃材质", true, func() {
-				part("glass-panels", "界面玻璃", &s.GlassPanels, a.leavePowerSaver)
-			})
-			// Each place glazed in liquid glass, which bends at its rim and
-			// thickens over what is busy, or in frosted.
-			glassKind := func(key string, scene glassScene, frost func(bool)) {
-				i := 0
-				if s.frosted(scene) {
-					i = 1
+			// Each place is plain (默认), in liquid glass, which bends at its
+			// rim and thickens over what is busy, or in frosted. 玻璃播放栏 and
+			// 界面玻璃 were switches of their own up to 1.3.10.
+			leaveGlobal := func() {
+				if !s.GlobalGlass {
+					return
 				}
-				if a.segmented(c.Key(key), &i, "液态玻璃", "毛玻璃") {
-					frost(i == 1)
+				// Each place keeps the glass the global glass gave it.
+				s.MenuLiquid, s.DialogLiquid = new(!s.frosted(sceneMenu)), new(!s.frosted(sceneDialog))
+				s.GlobalGlass, s.SidebarGlass, s.MainGlass, s.LiquidGlass, s.GlassPanels = false, true, true, true, true
+				s.MenuPlain, s.DialogPlain, s.AnalysisPlain = false, false, false
+				a.toast = "已关闭全局液态玻璃"
+			}
+			glassKind := func(key, label string, scene glassScene, glazed bool, pick func(i int)) {
+				i := 0
+				if glazed {
+					i = 1
+					if s.frosted(scene) {
+						i = 2
+					}
+				}
+				if a.segmented(c.Key(key), &i, "默认", "液态玻璃", "毛玻璃") {
+					if i == 0 {
+						leaveGlobal()
+					}
+					pick(i)
+					if i > 0 {
+						a.leavePowerSaver()
+					}
 					a.changed()
 				}
 			}
-			k.sub(c, "播放栏玻璃", "液态玻璃边缘折射、随背景调整浓淡；毛玻璃更朦胧", s.playerGlass(), func() {
-				glassKind("bar-glass-kind", sceneBar, func(f bool) { s.BarFrost = f })
+			paneKind := func(scene glassScene, liquid func(bool)) func(int) {
+				return func(i int) {
+					plain := s.plainOf(scene)
+					if i == 0 {
+						*plain = true
+						s.tidyPanes()
+						return
+					}
+					if !s.GlassPanels {
+						// The others stay as they were: plain.
+						s.GlassPanels = true
+						s.MenuPlain, s.DialogPlain, s.AnalysisPlain = true, true, true
+					}
+					*plain = false
+					liquid(i == 1)
+				}
+			}
+			placeGlazed := func(scene glassScene) bool {
+				return s.GlobalGlass || s.GlassPanels && !*s.plainOf(scene)
+			}
+			k.sub(c, "播放栏玻璃", "液态玻璃边缘折射、随背景调整浓淡；毛玻璃更朦胧", true, func() {
+				glassKind("bar-glass-kind", "播放栏玻璃", sceneBar, s.GlobalGlass || s.LiquidGlass, func(i int) {
+					s.LiquidGlass = i > 0
+					if i > 0 {
+						s.BarFrost = i == 2
+					}
+				})
 			})
-			k.sub(c, "菜单与浮层玻璃", "菜单、下拉列表、提示和托盘菜单", s.panelGlass(), func() {
-				glassKind("menu-glass-kind", sceneMenu, func(f bool) { s.MenuLiquid = new(!f) })
+			k.sub(c, "菜单与浮层玻璃", "菜单、下拉列表、提示和托盘菜单", true, func() {
+				glassKind("menu-glass-kind", "菜单与浮层玻璃", sceneMenu, placeGlazed(sceneMenu), paneKind(sceneMenu, func(l bool) { s.MenuLiquid = new(l) }))
 			})
-			k.sub(c, "对话框与设置玻璃", "对话框、设置和私信面板", s.panelGlass(), func() {
-				glassKind("dialog-glass-kind", sceneDialog, func(f bool) { s.DialogLiquid = new(!f) })
+			k.sub(c, "对话框与设置玻璃", "对话框、设置和私信面板", true, func() {
+				glassKind("dialog-glass-kind", "对话框与设置玻璃", sceneDialog, placeGlazed(sceneDialog), paneKind(sceneDialog, func(l bool) { s.DialogLiquid = new(l) }))
 			})
-			k.sub(c, "分析页卡片玻璃", "播放页「分析」里的两张卡片", s.panelGlass(), func() {
-				glassKind("analysis-glass-kind", sceneAnalysis, func(f bool) { s.AnalysisFrost = f })
+			k.sub(c, "分析页卡片玻璃", "播放页「分析」里的两张卡片", true, func() {
+				glassKind("analysis-glass-kind", "分析页卡片玻璃", sceneAnalysis, placeGlazed(sceneAnalysis), paneKind(sceneAnalysis, func(l bool) { s.AnalysisFrost = !l }))
 			})
-			refractive := s.playerGlass() && !s.BarFrost || s.panelGlass() && (!s.frosted(sceneMenu) || !s.frosted(sceneDialog) || !s.AnalysisFrost)
+			// Where Windows's transparency effects are off, the glass chosen
+			// above is solid: said, with the way to keep it (#69).
+			if a.sysOpaque || s.IgnoreSystemTransparency || k.searching {
+				k.sub(c, "无视系统透明效果设置", "Windows 关闭了透明效果时，玻璃会改用不透明底色；打开后仍按上面的设置显示玻璃", true, func() {
+					k.toggle(c, "ignore-system-transparency", "无视系统透明效果设置", &s.IgnoreSystemTransparency, false, nil)
+				})
+			}
+			refractive := s.playerGlass() && !s.BarFrost
+			for _, scene := range []glassScene{sceneMenu, sceneDialog, sceneAnalysis} {
+				refractive = refractive || s.glassIn(scene) && !s.frosted(scene)
+			}
+			k.block(c, "玻璃预览 玻璃透明度 折射强度", func() {
+				if refractive {
+					a.glassPreview(c)
+				}
+			})
 			k.sub(c, "玻璃透明度", "浅色和深色模式各自记住", refractive, func() {
 				clear := &s.GlassClear
 				if a.pal.dark {

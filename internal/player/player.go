@@ -1436,3 +1436,38 @@ func (p *Player) finish(s *checkedStream) {
 func (p *Player) cloudSong() bool {
 	return p.track != nil && p.track.Privilege != nil && p.track.Privilege.Cs
 }
+
+// Requality loads what plays again from where it is, playing or paused as
+// it is, for the level Quality returns now to take at once rather than
+// from the next track on (#60). Its lyrics stay as they are meanwhile. A
+// song played from a file has one level: it plays on.
+// RefreshCover fetches the cover of what plays again, at CoverSize, and
+// shows the system that one.
+func (p *Player) RefreshCover() {
+	if p.track == nil {
+		return
+	}
+	t, gen := *p.track, p.gen
+	go func() {
+		cover, err := fetchCover(t)
+		if err != nil {
+			return
+		}
+		p.post(func() {
+			if gen == p.gen {
+				p.announce(&t, cover)
+			}
+		})
+	}()
+}
+
+func (p *Player) Requality() {
+	if p.track == nil || p.track.LocalPath != "" || p.at < 0 || p.at >= len(p.order) {
+		return
+	}
+	lines, loaded := p.lyrics, p.lyricsLoaded
+	p.loadAttempt(p.at, 0, p.playing, p.Position(), 1, 0)
+	if loaded && p.track != nil {
+		p.lyrics, p.lyricsLoaded = lines, true
+	}
+}

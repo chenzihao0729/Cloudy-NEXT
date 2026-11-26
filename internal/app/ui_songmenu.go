@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
@@ -154,7 +155,7 @@ func (a *app) songMenuLabeled(c *ui.Context, tr *netease.Track, onDark bool, siz
 	if b.Clicked() {
 		// The details of what plays, which the sound effects shape too.
 		fx := menuAction{label: "音效", icon: iconWave, note: a.effectsNote(), do: a.openEffects}
-		groups := append([][]menuAction{{fx}}, extra...)
+		groups := append([][]menuAction{{fx, a.qualityAction()}}, extra...)
 		a.menuBelow(b, onDark, append(groups, a.songActions(tr, 0)...), a.songHead(tr))
 	}
 	return b
@@ -189,4 +190,44 @@ func (a *app) compactPlayerActions(tr *netease.Track) []menuAction {
 // on el, what shows it.
 func (a *app) songContext(el ui.Element, tr *netease.Track, pid int64) {
 	a.contextMenu(el, false, func() [][]menuAction { return a.songActions(tr, pid) }, a.songHead(tr))
+}
+
+// qualityAction is 音质 in the menu of what plays: its levels, the one
+// chosen checked, each taking at once (#60).
+func (a *app) qualityAction() menuAction {
+	var levels []menuAction
+	note := ""
+	for _, q := range qualityLevels {
+		on := q.level == a.settings.Quality
+		if on {
+			note = qualityShort(q.label)
+		}
+		levels = append(levels, menuAction{label: q.label, checked: on, tag: levelNeeds(q.level), locked: a.levelLocked(q.level), do: func() { a.setQuality(q.level) }})
+	}
+	return menuAction{label: "音质", icon: iconHeadset, note: note, sub: [][]menuAction{levels}}
+}
+
+// qualityShort is a level's label without what is in brackets: 极高 for
+// 极高（320k）.
+func qualityShort(label string) string {
+	if i := strings.Index(label, "（"); i > 0 {
+		return label[:i]
+	}
+	return label
+}
+
+// setQuality streams at level from now on, what plays too, again from
+// where it is.
+func (a *app) setQuality(level string) {
+	if level == a.settings.Quality {
+		return
+	}
+	a.settings.Quality = level
+	a.changed()
+	a.pl.Requality()
+	for _, q := range qualityLevels {
+		if q.level == level {
+			a.toast = "已切换为" + qualityShort(q.label) + "音质"
+		}
+	}
 }

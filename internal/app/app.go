@@ -97,6 +97,15 @@ type app struct {
 	// privAsked is when NetEase was last asked what may be played of a
 	// song, and queueRechecked when the queue was (playable_recheck.go).
 	privAsked map[int64]time.Time
+	// privKnown is what NetEase last said may be played of songs, by ID,
+	// for lists kept without it (the listening ledger).
+	privKnown map[int64]netease.Privilege
+	// vip is the memberships of who is signed in, the highest first
+	// (vip_tags.go).
+	vip []netease.Membership
+	// vipKnown is whether vip is what NetEase said for this sign-in, rather
+	// than not asked yet or not answered: only then are levels locked.
+	vipKnown bool
 	// openWithOn is whether Cloudy is among the apps that open songs, as
 	// the settings last asked the system; nil, not asked yet.
 	openWithOn     *bool
@@ -323,7 +332,8 @@ type app struct {
 
 	style         styleState   // the day's songs in the styles picked
 	deck          deckState    // the home page's calendar of the daily and style cards
-	week          weekState    // the songs played most in the last seven days
+	week          weekState    // what 听歌周报 shows: its tab, and the past week picked
+	listen        listenState  // 听歌账本: every play, by week (listen_log.go)
 	hist          historyDaily // the past daily recommendations NetEase keeps
 	deckDrawer    bool         // the settings' drawer of what the calendar holds is open
 	deckSort      deckSort     // a page dragged to a new place in that drawer
@@ -458,6 +468,7 @@ func Run() error {
 		a.pl.SetEffects(a.currentEffects(), false)
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.useMoreWords()
+		a.useMediaCover(false)
 		a.useOwnCovers()
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
 		a.pl.Crossfade = a.crossfade
@@ -485,6 +496,7 @@ func Run() error {
 		a.noteDownloadsAtStart()
 		a.pl.Listened = func(t netease.Track, played time.Duration, ended bool) {
 			a.listened(t, played, ended)
+			a.keepListened(t, played, ended, time.Now())
 			a.remember(t, played, ended)
 		}
 		a.pl.SongStopped = func() {
@@ -493,6 +505,7 @@ func Run() error {
 		}
 		a.pl.Changed = func() {
 			a.keepSession()
+			a.noteQueueSource()
 			a.autoFollow()
 			a.syncCaptions()
 			a.syncThumbs()
@@ -552,6 +565,7 @@ func Run() error {
 		// Shown or switched to the morning after, it shows the new day's.
 		a.win.OnFocus(func() {
 			a.freshenPersonal()
+			a.syncListening(false)
 			a.recheckQueue(false)
 			a.privateWindowFocused(time.Now())
 		})

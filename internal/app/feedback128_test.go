@@ -422,9 +422,14 @@ func TestCalendarBookmarks(t *testing.T) {
 	}
 	a.style.songs = netease.StyleSongs{Songs: songs, Picked: netease.StyleCategory{ID: 1000, Tags: []netease.StyleTag{{ID: 1, Name: "R&B"}}}}
 	a.style.loaded = true
+	var plays []listenEntry
+	now := time.Now()
 	for i, tr := range songs {
-		a.week.songs = append(a.week.songs, netease.Ranked{Track: tr, Plays: 9 - 3*i, Score: 100 - 30*i})
+		for k := range 9 - 3*i {
+			plays = append(plays, playAt(tr, now.Add(-time.Duration(10*i+k)*time.Second), 200, ""))
+		}
 	}
+	withPlays(a, plays...)
 	tt := ui.NewTester(a.view, 1700, 1100)
 	tt.Advance(time.Second)
 	dir := os.Getenv("NM_FRAMES")
@@ -544,11 +549,20 @@ func TestCalendarFMAndWeek(t *testing.T) {
 	a := newTestApp()
 	accentHome(a)
 	a.profile = &netease.Profile{UserID: 1, Nickname: "听众"}
+	var plays []listenEntry
+	now := time.Now()
 	for i, name := range []string{"FIRESTARTER", "Come Around Me", "Forever", "第四首"} {
 		tr := netease.Track{ID: int64(300 + i), Name: name, Duration: 180000, Artists: []netease.Artist{{Name: fmt.Sprint("歌手", i%2)}}, Album: netease.Album{PicURL: fmt.Sprintf("cover-%d", i)}}
-		a.week.songs = append(a.week.songs, netease.Ranked{Track: tr, Plays: 5 - i, Score: 100 - 20*i})
+		// The first and third on a phone, the others here.
+		dev := ""
+		if i%2 == 0 {
+			dev = "android"
+		}
+		for k := range 5 - i {
+			plays = append(plays, playAt(tr, now.Add(-time.Duration(10*i+k)*time.Second), 180, dev))
+		}
 	}
-	a.week.stats = weekStats{days: [7]int{3, 0, 5, 9, 2, 4, 6}, daysKnown: true, phone: 13, computer: 8}
+	withPlays(a, plays...)
 	a.deck = deckState{front: deckFM, chosen: true}
 	tt := ui.NewTester(a.view, 1700, 1100)
 	tt.Advance(time.Second)
@@ -572,8 +586,8 @@ func TestCalendarFMAndWeek(t *testing.T) {
 	}
 	tt.Advance(2 * time.Second)
 	shot("deck-week")
-	// 4 songs: (5+4+3+2) plays of 3 minutes.
-	if !tt.HasText("约 42 分钟") || !tt.HasText("手机 62% · 电脑 38%") || !tt.HasText("每天听过的歌") {
+	// 4 songs: (5+4+3+2) plays of 3 minutes, 8 of them on a phone.
+	if !tt.HasText("42 分钟") || !tt.HasText("手机 57% · 电脑 43%") || !tt.HasText("每天听了多久") {
 		t.Fatal("want the week's length, devices and days")
 	}
 	if err := tt.Click("听歌周报"); err != nil {
@@ -581,27 +595,10 @@ func TestCalendarFMAndWeek(t *testing.T) {
 	}
 	tt.Advance(time.Second)
 	shot("week-page")
-	if a.route.page != pageWeek || !tt.HasText("本周听歌排行") || !tt.HasText("5 次") {
+	if a.route.page != pageWeek || !tt.HasText("本周听歌") || !tt.HasText("5 次 · 15 分钟") {
 		t.Fatalf("page %v", a.route.page)
 	}
 
-	now := time.Date(2026, 11, 15, 20, 0, 0, 0, time.Local)
-	plays := []netease.Play{
-		{At: now.Add(-time.Hour), Device: "android"},
-		{At: now.Add(-30 * time.Hour), Device: "pc"},
-		{At: now.Add(-50 * time.Hour), Device: "osx"},
-		{At: now.AddDate(0, 0, -9), Device: "android"},
-	}
-	s := weekStatsOf(plays, now)
-	if !s.daysKnown || s.days[6] != 1 || s.days[5] != 1 || s.days[4] != 1 || s.phone != 1 || s.computer != 2 {
-		t.Fatalf("stats %+v", s)
-	}
-	if got := weekStatsOf(plays[:2], now); got.daysKnown {
-		t.Fatal("two plays of today and yesterday do not reach back a week")
-	}
-	if weekLength(380) != "约 6 小时 20 分" || weekRange(now) != "11.09 – 11.15" {
-		t.Fatalf("%q %q", weekLength(380), weekRange(now))
-	}
 }
 
 // With NM_FRAMES set, saves each page of the calendar in a narrow window,
@@ -618,7 +615,7 @@ func TestCalendarNarrowFrames(t *testing.T) {
 	songs := []netease.Track{{ID: 100, Name: "Best Part", Duration: 200000, Album: netease.Album{PicURL: "cover-1"}}}
 	a.style.songs = netease.StyleSongs{Songs: songs, Picked: netease.StyleCategory{ID: 1000, Tags: []netease.StyleTag{{ID: 1, Name: "R&B"}}}}
 	a.style.loaded = true
-	a.week.songs = []netease.Ranked{{Track: songs[0], Plays: 3, Score: 100}}
+	withPlays(a, playAt(songs[0], time.Now(), 200, ""))
 	for _, pg := range deckAll {
 		a.deck = deckState{front: pg, chosen: true}
 		tt := ui.NewTester(a.view, 1000, 700)

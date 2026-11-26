@@ -28,6 +28,9 @@ type artwork struct {
 	sticker  *stickerAnimation
 	backdrop *ui.Bitmap
 	tint     ui.Color // the cover's most vivid color
+	// light is how light the cover is on the whole, 0 black to 1 white,
+	// for a cover with a backdrop: a dark one is lifted on a light page.
+	light float32
 	// palette is what the cover is made of, its ground first
 	// (coverPalette), for Now Playing's covers, which have a backdrop.
 	palette []ui.Color
@@ -261,6 +264,7 @@ func artOf(b []byte, url string, backdrop, sticker, animate bool) (*artwork, err
 		a.backdrop = ui.NewBitmap(blurred)
 		a.size += len(blurred.Pix)
 		a.palette = coverPalette(img)
+		a.light = meanLight(img)
 	}
 	return a, nil
 }
@@ -390,6 +394,20 @@ func firstWebPFrame(b []byte) []byte {
 }
 
 // shrink averages img down to n×n pixels.
+// meanLight is how light img is on the whole, 0 black to 1 white.
+func meanLight(img image.Image) float32 {
+	small := shrink(img, 16)
+	sum, n := 0.0, 0
+	for i := 0; i < len(small.Pix); i += 4 {
+		sum += luminance(ui.RGB(small.Pix[i], small.Pix[i+1], small.Pix[i+2]))
+		n++
+	}
+	if n == 0 {
+		return 0.5
+	}
+	return float32(sum / float64(n))
+}
+
 func shrink(img image.Image, n int) *image.RGBA {
 	b := img.Bounds()
 	out := image.NewRGBA(image.Rect(0, 0, n, n))

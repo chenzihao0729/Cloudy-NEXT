@@ -22,6 +22,7 @@ var downloadLevels = []struct {
 	{"exhigh", "极高"},
 	{"lossless", "无损"},
 	{"hires", "Hi-Res"},
+	{"jymaster", "超清母带"},
 }
 
 // downloadLevel is the level songs download at.

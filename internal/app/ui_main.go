@@ -23,7 +23,7 @@ func (a *app) view(c *ui.Context) {
 		c.After(30 * time.Second)
 	}
 	// The desktop asking for opaque surfaces makes the app's own glass solid.
-	a.settings.opaque = a.sysOpaque
+	a.settings.opaque = a.sysOpaque && !a.settings.IgnoreSystemTransparency
 	t := *c.Theme()
 	a.pal = paletteFor(&t)
 	if accent := a.chosenAccent(); accent != "" {
@@ -204,6 +204,10 @@ func (a *app) glassPageBackdrop(page ui.Element) {
 	} else if a.chosenAccent() != "" {
 		tint = a.pal.accent
 	}
+	light := !a.pal.dark
+	if light {
+		tint = liftTint(tint)
+	}
 	tint = page.AnimateColor("glass-tint", tint, ui.Animation{Duration: backdropFade})
 	at, still := g.at, a.motion == motionOff
 	if still || time.Since(at) >= backdropFade {
@@ -225,10 +229,48 @@ func (a *app) glassPageBackdrop(page ui.Element) {
 		if shown != nil {
 			p.ImageRegion(shown, ui.Rect{}, r, ui.ImageOptions{Tint: white.Alpha(0.32 * k)})
 		}
+		if light {
+			// A dark cover would darken the light page as a whole: as
+			// dark as it is, a white veil lifts it back to a pastel of
+			// itself, keeping its colors.
+			if v := coverVeil(g.shown)*k + coverVeil(g.before)*(1-k); v > 0.005 {
+				p.Fill(r, white.Alpha(v), 0)
+			}
+		}
 		if k < 1 {
 			p.AnimationFrame()
 		}
 	})
+}
+
+// coverLiftFrom is how light a cover may be, on the whole, before the light
+// page lifts it; coverVeilMost is the most white it lays over the darkest.
+const (
+	coverLiftFrom = 0.6
+	coverVeilMost = 0.5
+)
+
+// coverVeil is how much white lifts art, a cover the light page shows.
+func coverVeil(art *artwork) float32 {
+	if art == nil || art.backdrop == nil {
+		return 0
+	}
+	d := clamp01((coverLiftFrom - art.light) / coverLiftFrom)
+	return coverVeilMost * d
+}
+
+// liftTint is c, a cover's color laid over the light page, mixed with white
+// until it is at least as light as a pastel: a black cover's grey would
+// make the whole page dim.
+func liftTint(c ui.Color) ui.Color {
+	const least = 0.72
+	l := luminance(c)
+	if l >= least {
+		return c
+	}
+	t := (least - l) / (1 - l)
+	mix := func(v uint8) uint8 { return uint8(float64(v) + (255-float64(v))*t + 0.5) }
+	return ui.RGBA(mix(c.R), mix(c.G), mix(c.B), float32(c.A)/255)
 }
 
 // pageGlass is the cover the cover backgrounds show, and the one it fades
@@ -356,8 +398,9 @@ func (a *app) load(r route) {
 	case pageRecent:
 		a.recent.sure = false
 	case pageWeek:
-		if len(a.week.songs) == 0 {
-			a.loadWeek()
+		a.syncListening(false)
+		if a.week.tab == weekTabAll {
+			a.loadAllListening()
 		}
 	case pageHistoryDaily:
 		a.loadHistoryDays()
@@ -453,7 +496,7 @@ func (a *app) sidebar(c *ui.Context, foreground float32) {
 
 		// What plays, as a card at the foot of the sidebar, over who listens.
 		// Not with the bar of glass, which says as much, and more, beside it.
-		if tr := a.pl.Current(); tr != nil && !a.settings.playerGlass() {
+		if tr := a.pl.Current(); tr != nil && !a.settings.barFloats() {
 			a.sidebarNowPlaying(c, tr)
 		}
 		a.accountRow(c)
@@ -591,7 +634,7 @@ func (a *app) pageTop(c *ui.Context, foreground float32) {
 		// The fade lays the page's plain color over what scrolls under the
 		// top, which over the cover's colors shows as a pale band: none.
 		ui.Box(c.Key("top-drag")).Absolute().Top(0).Left(0).Right(0).Height(top).DragWindow()
-	} else if a.settings.playerGlass() {
+	} else if a.settings.barFloats() {
 		edge := ui.Box(c.Key("top-edge")).Absolute().Top(0).Left(0).Right(0).Height(top + 24).PassThrough()
 		edge.Material(glass.ScrollEdge{Background: a.pal.bg})
 		edge.Opacity(edgeShown(edge, a.underTop))
@@ -729,8 +772,7 @@ func (a *app) loadHome() {
 	a.loadStyle()
 	a.radar.lists = nil
 	a.loadRadars()
-	a.week.songs = nil
-	a.loadWeek()
+	a.syncListening(false)
 	a.filteredPlaylists = [len(playlistFilters)]*playlistBrowseData{}
 	signedIn := a.profile != nil
 	at := time.Now()

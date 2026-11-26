@@ -122,7 +122,11 @@ func (a *app) deckHas(pg deckPage) bool {
 	case deckFM, deckRadar:
 		return a.profile != nil
 	case deckWeek:
-		return a.profile != nil && len(a.week.songs) > 0
+		if a.profile == nil {
+			return false
+		}
+		r, _ := a.deckWeekReport(time.Now())
+		return len(r.songs) > 0
 	}
 	return false
 }
@@ -144,8 +148,8 @@ func (a *app) deckCover(pg deckPage) string {
 		pl := a.radar.lists[radars[0].id]
 		return pl.Cover()
 	case deckWeek:
-		if len(a.week.songs) > 0 {
-			return a.week.songs[0].Track.Album.PicURL
+		if r, _ := a.deckWeekReport(time.Now()); len(r.songs) > 0 {
+			return r.songs[0].Track.Album.PicURL
 		}
 	}
 	return ""

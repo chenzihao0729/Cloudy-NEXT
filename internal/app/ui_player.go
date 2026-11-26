@@ -573,13 +573,18 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 		a.picked = pickedUp{}
 	}
 	liquid := a.settings.playerGlass()
-	a.barScrub.lens = liquid
+	// Floating is the bar's shape, glass its material: a capsule may be
+	// plain, where glass is off or the desktop asks for opaque (#69).
+	floats := a.settings.barFloats()
+	a.barScrub.lens = liquid && floats
 	// Glass shows anything through: what is on it keeps its contrast by
 	// being stronger than over the plain page.
 	muted, faint, track, cover := p.muted, p.faint, p.press, float32(8)
 	glassH := float32(playerBarHeight - glassBarFoot)
 	if liquid {
 		muted, faint, track = p.text.Alpha(0.84), p.text.Alpha(0.74), p.text.Alpha(0.22)
+	}
+	if floats {
 		cover = glassH/2 - glassBarInset - 8
 	} else {
 		// Over the foot of the page: while content is under it, its edge
@@ -597,7 +602,7 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 	// grow). The title gets its own share before progress takes the rest.
 	ww, _ := c.Size()
 	available := ww - a.sideWidth(ww) - 40
-	if liquid {
+	if floats {
 		available = ww - a.sideWidth(ww) - 2*glassBarSide - glassBarInset - 20
 	}
 	compact := available < 840
@@ -633,10 +638,14 @@ func (a *app) playerBar(c *ui.Context, foreground float32) {
 	}
 	bar := ui.Row(c).Absolute().Gap(gap).AlignItems(ui.Center)
 	a.barBox = bar.LayoutBounds()
-	if liquid {
+	if floats {
 		bar.Left(glassBarSide).Right(glassBarSide).Bottom(glassBarFoot).Height(glassH).Padding(0, 20, 0, glassBarInset).
-			Radius(glassH/2).Shadow(0, 6, 24, -6, ui.RGBA(0, 0, 0, 0.3)).
-			Material(a.barMaterial(p.dark))
+			Radius(glassH/2).Shadow(0, 6, 24, -6, ui.RGBA(0, 0, 0, 0.3))
+		if liquid {
+			bar.Material(a.barMaterial(p.dark))
+		} else {
+			a.plainPane(bar, false)
+		}
 	} else {
 		bar.Left(0).Right(0).Bottom(0).Height(playerBarHeight).PaddingX(20)
 	}

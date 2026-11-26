@@ -77,9 +77,38 @@ func (a *app) privilegesCame(gen int, tracks []netease.Track, by map[int64]netea
 			tracks[i].Privilege = &pr
 		}
 	}
+	if a.privKnown == nil {
+		a.privKnown = map[int64]netease.Privilege{}
+	}
+	for id, pr := range by {
+		a.privKnown[id] = pr
+	}
 	a.pl.SetPrivileges(by)
 	if done != nil {
 		done()
+	}
+}
+
+// knownPrivileges puts in tracks, in place, what NetEase last said may be
+// played of them, and asks it of those still looking unplayable: a list
+// kept without privileges, as the listening ledger keeps its songs, would
+// otherwise grey every VIP song for a member. Each song is asked once in a
+// while (recheckGap), so calling it every frame asks once.
+func (a *app) knownPrivileges(tracks []netease.Track) {
+	if a.profile == nil {
+		return
+	}
+	ask := false
+	for i := range tracks {
+		tr := &tracks[i]
+		if pr, ok := a.privKnown[tr.ID]; ok && tr.ProgramID == 0 && tr.LocalPath == "" {
+			tr.Privilege = &pr
+		} else if looksUnplayable(tr) {
+			ask = true
+		}
+	}
+	if ask {
+		a.recheckPlayable(append([]netease.Track(nil), tracks...), a.redraw)
 	}
 }
 

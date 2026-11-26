@@ -18,6 +18,25 @@ var moreWordsOn atomic.Bool
 // findMoreWords is wordlyrics.Find; tests replace it.
 var findMoreWords = wordlyrics.Find
 
+// useMediaCover tells the player how large a cover the system's media
+// controls get; again, it fetches the cover of what plays at that size.
+func (a *app) useMediaCover(again bool) {
+	n := a.settings.MediaCover
+	switch {
+	case n == 0:
+		n = 600
+	case n < 0:
+		n = 0
+	}
+	if int(player.CoverSize.Load()) == n {
+		return
+	}
+	player.CoverSize.Store(int32(n))
+	if again && a.pl != nil {
+		a.pl.RefreshCover()
+	}
+}
+
 // useMoreWords has the player look for word-timed lyrics elsewhere, for
 // songs NetEase times only by line, while the setting is on.
 func (a *app) useMoreWords() {

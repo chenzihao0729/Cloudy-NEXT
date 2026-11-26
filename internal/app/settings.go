@@ -82,6 +82,23 @@ type settings struct {
 	MenuLiquid    *bool `json:"menuLiquid,omitempty"`
 	DialogLiquid  *bool `json:"dialogLiquid,omitempty"`
 	AnalysisFrost bool  `json:"analysisFrost,omitempty"`
+	// MenuPlain, DialogPlain and AnalysisPlain leave one place of the
+	// panes' glass (GlassPanels) plain: each place is 默认, 液态玻璃 or 毛玻璃
+	// on its own since 1.3.11, where one switch (界面玻璃) took all three.
+	MenuPlain     bool `json:"menuPlain,omitempty"`
+	DialogPlain   bool `json:"dialogPlain,omitempty"`
+	AnalysisPlain bool `json:"analysisPlain,omitempty"`
+	// BarDocked lays the player bar along the foot of the window, square,
+	// rather than floating as a round capsule (by default), whatever its
+	// material: glass, or plain where there is none (#69).
+	BarDocked bool `json:"barDocked,omitempty"`
+	// IgnoreSystemTransparency keeps the app's own glass while Windows's
+	// transparency effects are off: the app draws it itself, and some turn
+	// those off for the taskbar's look, not to keep apps opaque (#69).
+	IgnoreSystemTransparency bool `json:"ignoreSystemTransparency,omitempty"`
+	// GlassPreviewBg is the picture the glass preview lies over, by its
+	// label in glassBackdrops: "" for the first.
+	GlassPreviewBg string `json:"glassPreviewBg,omitempty"`
 	// Motion is how much the app moves: full, lite or off.
 	Motion string `json:"motion,omitempty"`
 	// IgnoreSystemMotion keeps the app moving while the desktop asks for
@@ -192,6 +209,9 @@ type settings struct {
 	// TaskbarProgress shows how far the song has played on the window's
 	// taskbar button.
 	TaskbarProgress bool `json:"taskbarProgress"`
+	// MediaCover is how large a cover the system's media controls get:
+	// 0 or 600 standard, 1080, or -1 the cover as NetEase keeps it.
+	MediaCover int `json:"mediaCover,omitempty"`
 	// MiniX and MiniY are where the mini window was left.
 	MiniX int `json:"miniX,omitempty"`
 	MiniY int `json:"miniY,omitempty"`
@@ -224,6 +244,10 @@ type settings struct {
 	// over CrossfadeSec seconds (0 for 3).
 	Crossfade    bool `json:"crossfade,omitempty"`
 	CrossfadeSec int  `json:"crossfadeSec,omitempty"`
+	// ClickAdds plays a song clicked in a list after the one playing, the
+	// queue left as it was, instead of the list becoming the queue. Search
+	// always adds, whatever this says.
+	ClickAdds bool `json:"clickAdds,omitempty"`
 	// HotComments shows a song's hot comments in its quiet parts, in
 	// place of the lyrics (quietComment): the listener turns it on.
 	HotComments bool `json:"hotComments"`
@@ -334,8 +358,52 @@ func baseSettings() settings {
 func (s settings) playerGlass() bool {
 	return !s.PowerSaver && !s.opaque && (s.GlobalGlass || s.LiquidGlass)
 }
+
+// panelGlass reports whether any place of the panes is glass.
 func (s settings) panelGlass() bool {
 	return !s.PowerSaver && !s.opaque && (s.GlobalGlass || s.GlassPanels)
+}
+
+// glassIn reports whether a place of the panes (menus, dialogs, the
+// analysis cards) is glass: the panes' glass, unless that place is plain.
+func (s settings) glassIn(scene glassScene) bool {
+	if !s.panelGlass() {
+		return false
+	}
+	if s.GlobalGlass {
+		return true
+	}
+	switch scene {
+	case sceneDialog:
+		return !s.DialogPlain
+	case sceneAnalysis:
+		return !s.AnalysisPlain
+	}
+	return !s.MenuPlain
+}
+
+// barFloats reports whether the player bar floats as a capsule: by default,
+// glass or not (#69), unless docked.
+func (s settings) barFloats() bool { return !s.BarDocked }
+
+// plainOf reports where a place of the panes is kept plain.
+func (s *settings) plainOf(scene glassScene) *bool {
+	switch scene {
+	case sceneDialog:
+		return &s.DialogPlain
+	case sceneAnalysis:
+		return &s.AnalysisPlain
+	}
+	return &s.MenuPlain
+}
+
+// tidyPanes keeps the panes' glass in one form: all three places plain is
+// the panes' glass off, as presets and the power saver read it.
+func (s *settings) tidyPanes() {
+	if s.MenuPlain && s.DialogPlain && s.AnalysisPlain {
+		s.GlassPanels = false
+		s.MenuPlain, s.DialogPlain, s.AnalysisPlain = false, false, false
+	}
 }
 func (s settings) sidebarGlass() bool { return !s.PowerSaver && (s.GlobalGlass || s.SidebarGlass) }
 func (s settings) mainGlass() bool    { return !s.PowerSaver && (s.GlobalGlass || s.MainGlass) }
@@ -544,6 +612,7 @@ var qualityLevels = []struct{ level, label string }{
 	{"exhigh", "极高（320k）"},
 	{"lossless", "无损（FLAC）"},
 	{"hires", "Hi-Res"},
+	{"jymaster", "超清母带"},
 }
 
 // cacheLimits are the sizes the song cache may take, in megabytes.
