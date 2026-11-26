@@ -219,6 +219,10 @@ func qualityShort(label string) string {
 // setQuality streams at level from now on, what plays too, again from
 // where it is.
 func (a *app) setQuality(level string) {
+	if why := a.levelLocked(level); why != "" {
+		a.toast = why
+		return
+	}
 	if level == a.settings.Quality {
 		return
 	}

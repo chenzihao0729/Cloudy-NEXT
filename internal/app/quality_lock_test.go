@@ -2,6 +2,7 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"netease-music-mygo/internal/netease"
 )
@@ -16,8 +17,8 @@ func TestQualityLockedByMembership(t *testing.T) {
 	}
 	a.profile = &netease.Profile{UserID: 1}
 	a.vipKnown = false
-	if a.levelLocked("jymaster") != "" {
-		t.Error("locked before NetEase said what is held")
+	if a.levelLocked("jymaster") == "" {
+		t.Error("mastering unlocked before SVIP was confirmed")
 	}
 	a.vipKnown, a.vip = true, nil
 	if a.levelLocked("hires") == "" || a.levelLocked("higher") != "" {
@@ -39,5 +40,36 @@ func TestQualityLockedByMembership(t *testing.T) {
 		if act.label == "超清母带" && act.locked == "" {
 			t.Error("the menu left 超清母带 open to 音乐包")
 		}
+	}
+}
+
+// A persisted mastering preference must not outlive the verified account's
+// SVIP, and direct quality actions must obey the same gate as the menu.
+func TestMasteringRequiresConfirmedActiveSVIP(t *testing.T) {
+	a := newTestApp()
+	a.settings.Quality = "jymaster"
+	if a.playbackQuality() != "exhigh" {
+		t.Fatal("logged-out mastering request")
+	}
+	a.profile = &netease.Profile{UserID: 1, VIPType: 11}
+	a.vip = []netease.Membership{{Name: "黑胶SVIP", Expires: time.Now().Add(time.Hour)}}
+	if a.playbackQuality() != "exhigh" {
+		t.Fatal("unconfirmed mastering request")
+	}
+	a.vipKnown = true
+	if a.playbackQuality() != "jymaster" {
+		t.Fatal("active SVIP mastering blocked")
+	}
+	if a.preferSource(netease.Track{ID: 1, Fee: 1}) {
+		t.Fatal("SVIP mastering preferred plugin")
+	}
+	a.vip[0].Expires = time.Now().Add(-time.Hour)
+	if a.playbackQuality() != "exhigh" {
+		t.Fatal("expired mastering request")
+	}
+	a.settings.Quality = "exhigh"
+	a.setQuality("jymaster")
+	if a.settings.Quality != "exhigh" {
+		t.Fatal("direct action bypassed SVIP gate")
 	}
 }

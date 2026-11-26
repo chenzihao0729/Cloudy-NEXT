@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -130,10 +131,16 @@ func (a *app) levelLocked(level string) string {
 		return "登录并开通" + name + "后才能使用"
 	}
 	if !a.vipKnown {
+		if need == "SVIP" {
+			return "尚未确认黑胶 SVIP 会员信息，请稍后重试"
+		}
 		return ""
 	}
 	vip, svip := false, false
 	for _, m := range a.vip {
+		if !m.Expires.IsZero() && !m.Expires.After(time.Now()) {
+			continue
+		}
 		svip = svip || m.SVIP()
 		vip = vip || m.SVIP() || m.Name == "黑胶VIP"
 	}
@@ -141,4 +148,13 @@ func (a *app) levelLocked(level string) string {
 		return "开通" + name + "后才能使用"
 	}
 	return ""
+}
+
+// Stored mastering preferences must not request SVIP audio after logout,
+// expiry, or before membership has been confirmed for this account.
+func (a *app) playbackQuality() string {
+	if a.settings.Quality == "jymaster" && a.levelLocked("jymaster") != "" {
+		return "exhigh"
+	}
+	return a.settings.Quality
 }

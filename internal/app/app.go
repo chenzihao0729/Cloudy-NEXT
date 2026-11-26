@@ -466,7 +466,7 @@ func Run() error {
 		a.loadSourcePlugin()
 		a.pl.PodcastSpeed = a.settings.PodcastSpeed
 		a.pl.SetEffects(a.currentEffects(), false)
-		a.pl.Quality = func() string { return a.settings.Quality }
+		a.pl.Quality = a.playbackQuality
 		a.useMoreWords()
 		a.useMediaCover(false)
 		a.useOwnCovers()

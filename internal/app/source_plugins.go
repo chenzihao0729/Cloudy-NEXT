@@ -45,6 +45,9 @@ func (a *app) preferSource(track netease.Track) bool {
 	if track.NoCopyright() {
 		return a.source != nil && a.source.isEnabled()
 	}
+	if a.playbackQuality() == "jymaster" {
+		return false // Confirmed SVIP mastering is resolved by NetEase first.
+	}
 	if !a.canUseVIPSource() || !track.RequiresVIP() {
 		return false
 	}
@@ -127,8 +130,11 @@ func (m *sourceManager) Resolve(ctx context.Context, track netease.Track, level 
 	artists := track.ArtistNames()
 	query := strings.TrimSpace(strings.Join(append([]string{track.Name}, trackArtistNames(track)...), " "))
 	quality, streamLevel, streamType := "320k", "exhigh", "mp3"
-	if level == "lossless" || level == "hires" {
+	if level == "lossless" || level == "hires" || level == "jymaster" {
 		quality, streamLevel, streamType = "flac", "lossless", "flac"
+	}
+	if level == "jymaster" {
+		m.addLog("info", "超清母带仅支持网易云官方 SVIP 播放；切换插件后尝试普通 FLAC 无损")
 	}
 	resolver, err := m.getResolver(script)
 	if err != nil {
