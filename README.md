@@ -68,7 +68,7 @@ Zihao C 维护的音乐桌面客户端，基于 [nya-owo/cloudy](https://github.
 ```bash
 go tool mygo dev     # 开发模式运行
 go tool mygo build   # 打包到 build/
-go test ./...        # 运行测试
+go test -timeout 45m ./...  # 运行测试（internal/app 超过默认的 10 分钟）
 ```
 
 ## AI 贡献者
