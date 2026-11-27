@@ -1,6 +1,7 @@
 package sourcecatalog
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -57,5 +58,30 @@ func TestMatchDifferentArtistCreditUsesAlbumAndDuration(t *testing.T) {
 	got, ok := Match(track, songs)
 	if !ok || got.ID != "right" {
 		t.Fatalf("Match() = %#v, %v; want album and duration-confirmed candidate", got, ok)
+	}
+}
+
+// A language label present in one catalog but omitted in another does not
+// prevent an otherwise confirmed recording from matching.
+func TestMatchLanguageEditionMayOmitSuffix(t *testing.T) {
+	track := netease.Track{
+		Name: "你的意义(中文版)", Duration: 240_000,
+		Artists: []netease.Artist{{Name: "歌手"}},
+		Album:   netease.Album{Name: "你的意义"},
+	}
+	want := Song{ID: "base", Name: "你的意义", Artists: []string{"歌手"}, Album: "你的意义", Duration: 240 * time.Second}
+	got, ok := Match(track, []Song{{ID: "wrong", Name: "你的意义", Artists: []string{"其他歌手"}}, want})
+	if !ok || got.ID != want.ID || SearchTitle(track.Name) != "你的意义" {
+		t.Fatalf("Match() = %#v, %v; base title %q", got, ok, SearchTitle(track.Name))
+	}
+}
+
+// Provider credits recognize ASCII and Chinese comma forms, enumeration
+// commas and their half-width form as the same multi-artist structure.
+func TestSplitArtistsRecognizesChineseSeparators(t *testing.T) {
+	got := SplitArtists("甲,乙，丙、丁､戊/己")
+	want := []string{"甲", "乙", "丙", "丁", "戊", "己"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("SplitArtists() = %q, want %q", got, want)
 	}
 }

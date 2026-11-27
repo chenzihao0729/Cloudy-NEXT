@@ -70,11 +70,12 @@ func providerTrack(platform string, song sourcecatalog.Song) netease.Track {
 	t := netease.Track{ID: id, Name: song.Name, Duration: song.Duration.Milliseconds(), Album: netease.Album{Name: song.Album, PicURL: song.CoverURL}, Source: &netease.SourceTrack{Platform: platform, IsCover: song.IsCover, LyricURL: song.LyricURL, ID: song.ID, MID: song.MID, MediaMID: song.MediaMID, Hash: song.Hash}}
 	for i, name := range song.Artists {
 		mid := ""
-		if platform == "tx" && i < len(song.ArtistMIDs) {
+		if i < len(song.ArtistMIDs) {
 			mid = song.ArtistMIDs[i]
 		}
 		t.Artists = append(t.Artists, netease.Artist{Name: name, SourceMID: mid})
 	}
+	t.Artists = expandedArtists(t.Artists)
 	t.Source.AlbumMID = song.AlbumMID
 	return t
 }
@@ -188,6 +189,11 @@ func searchRank(query string, t netease.Track) int {
 	if (tags != "" || strings.Contains(t.Album.Name, "翻唱") || t.Source != nil && t.Source.IsCover) && sourcecatalog.VersionTags(query) == "" {
 		rank += 3
 	}
+	// Incomplete legacy rows are often user uploads that dropped the edition
+	// suffix and album. Keep them available, but below catalogued recordings.
+	if t.Source != nil && t.Source.Platform == "kw" && strings.TrimSpace(t.Album.Name) == "" {
+		rank += 2
+	}
 	return rank
 }
 
@@ -285,6 +291,9 @@ func applySearchAnswers(query string, d *searchData, requests []searchRequestPag
 		state.more = len(answer.songs) >= 20
 		added := 0
 		for _, t := range answer.songs {
+			if !usefulSearchResult(t) {
+				continue
+			}
 			if !m.seen[t.ID] {
 				m.seen[t.ID] = true
 				batch = append(batch, t)
@@ -313,6 +322,14 @@ func applySearchAnswers(query string, d *searchData, requests []searchRequestPag
 	}
 }
 
+// Short-video catalogs expose generated UGC sounds as if they were songs.
+// This exact form is not a playable music result; ordinary soundtrack titles
+// containing “原声” remain visible.
+func usefulSearchResult(track netease.Track) bool {
+	name := strings.TrimSpace(track.Name)
+	return !(strings.HasPrefix(name, "@") && strings.HasSuffix(name, "创作的原声"))
+}
+
 // Only merge confidently identical recordings; missing metadata is not evidence.
 func sameSearchRecording(a, b netease.Track) bool {
 	if !sameSearchTitle(a.Name, b.Name) {
@@ -328,14 +345,15 @@ func sameSearchRecording(a, b netease.Track) bool {
 	if delta > 3000 {
 		return false
 	}
-	if len(a.Artists) == 0 || len(a.Artists) != len(b.Artists) {
+	leftArtists, rightArtists := trackArtistNames(a), trackArtistNames(b)
+	if len(leftArtists) == 0 || len(leftArtists) != len(rightArtists) {
 		return false
 	}
-	used := make([]bool, len(b.Artists))
-	for _, artist := range a.Artists {
+	used := make([]bool, len(rightArtists))
+	for _, artist := range leftArtists {
 		found := false
-		for j, other := range b.Artists {
-			if !used[j] && sourcecatalog.SameArtist(artist.Name, other.Name) {
+		for j, other := range rightArtists {
+			if !used[j] && sourcecatalog.SameArtist(artist, other) {
 				used[j] = true
 				found = true
 				break

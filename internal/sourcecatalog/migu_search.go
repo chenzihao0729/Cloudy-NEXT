@@ -19,9 +19,11 @@ func searchMiguApp(ctx context.Context, query string, limit int) ([]Song, error)
 				ContentID string `json:"contentId"`
 				Name      string `json:"name"`
 				Singers   []struct {
+					ID   string `json:"id"`
 					Name string `json:"name"`
 				} `json:"singers"`
 				Albums []struct {
+					ID   string `json:"id"`
 					Name string `json:"name"`
 				} `json:"albums"`
 				Images []struct {
@@ -46,9 +48,11 @@ func searchMiguApp(ctx context.Context, query string, limit int) ([]Song, error)
 		song := Song{ID: row.ID, Name: row.Name, IsCover: slices.Contains(row.Tags, "翻唱"), LyricURL: row.LyricURL}
 		for _, artist := range row.Singers {
 			song.Artists = append(song.Artists, artist.Name)
+			song.ArtistMIDs = append(song.ArtistMIDs, artist.ID)
 		}
 		if len(row.Albums) > 0 {
 			song.Album = row.Albums[0].Name
+			song.AlbumMID = row.Albums[0].ID
 		}
 		if len(row.Images) > 0 {
 			song.CoverURL = row.Images[0].URL

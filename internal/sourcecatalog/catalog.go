@@ -148,11 +148,16 @@ func (kugouSearcher) Search(ctx context.Context, query string, limit int) ([]Son
 				Hash       string `json:"hash"`
 				Name       string `json:"songname"`
 				Singer     string `json:"singername"`
+				SingerID   string `json:"singer_id"`
 				Album      string `json:"album_name"`
+				AlbumID    string `json:"album_id"`
 				Duration   int    `json:"duration"`
 				AudioID    int64  `json:"album_audio_id"`
 				AudioIDAlt int64  `json:"audio_id"`
 				Cover      string `json:"img"`
+				Transfer   struct {
+					Cover string `json:"union_cover"`
+				} `json:"trans_param"`
 			} `json:"info"`
 		} `json:"data"`
 	}
@@ -172,8 +177,11 @@ func (kugouSearcher) Search(ctx context.Context, query string, limit int) ([]Son
 		if id == 0 {
 			id = row.AudioIDAlt
 		}
-		cover := strings.ReplaceAll(row.Cover, "{size}", "400")
-		out = append(out, Song{ID: strconv.FormatInt(id, 10), Hash: row.Hash, Name: row.Name, Artists: splitArtists(row.Singer), Album: row.Album, Duration: time.Duration(row.Duration) * time.Second, CoverURL: cover})
+		cover := row.Cover
+		if cover == "" {
+			cover = row.Transfer.Cover
+		}
+		out = append(out, Song{ID: strconv.FormatInt(id, 10), Hash: row.Hash, Name: row.Name, Artists: SplitArtists(row.Singer), ArtistMIDs: splitProviderIDs(row.SingerID), Album: row.Album, AlbumMID: row.AlbumID, Duration: time.Duration(row.Duration) * time.Second, CoverURL: providerImageURL(cover, 400)})
 	}
 	return out, nil
 }
@@ -189,7 +197,9 @@ func (kuwoSearcher) Search(ctx context.Context, query string, limit int) ([]Song
 				RID      json.RawMessage `json:"rid"`
 				Name     string          `json:"name"`
 				Artist   string          `json:"artist"`
+				ArtistID json.RawMessage `json:"artistid"`
 				Album    string          `json:"album"`
+				AlbumMID json.RawMessage `json:"albumid"`
 				Duration string          `json:"songTimeMinutes"`
 				AlbumID  string          `json:"albumpic"`
 			} `json:"list"`
@@ -208,7 +218,7 @@ func (kuwoSearcher) Search(ctx context.Context, query string, limit int) ([]Song
 		if id == "" || row.Name == "" {
 			continue
 		}
-		out = append(out, Song{ID: id, Name: row.Name, Artists: splitArtists(row.Artist), Album: row.Album, Duration: parseDuration(row.Duration), CoverURL: row.AlbumID})
+		out = append(out, Song{ID: id, Name: cleanKuwoText(row.Name), Artists: SplitArtists(cleanKuwoText(row.Artist)), ArtistMIDs: splitKuwoIDs(rawID(row.ArtistID)), Album: cleanKuwoText(row.Album), AlbumMID: rawID(row.AlbumMID), Duration: parseDuration(row.Duration), CoverURL: kuwoCoverURL(row.AlbumID)})
 	}
 	return out, nil
 }
@@ -246,8 +256,17 @@ func getJSON(ctx context.Context, address, referer string, target any) error {
 	return nil
 }
 
-func splitArtists(value string) []string {
-	parts := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == '&' || r == '/' || r == '、' })
+// SplitArtists separates combined credit fields returned by providers.
+// Catalogs use ASCII/full-width commas and the Chinese enumeration comma
+// interchangeably, sometimes in the same response.
+func SplitArtists(value string) []string {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		switch r {
+		case ',', '，', '、', '､', '&', '＆', '/', ';', '；':
+			return true
+		}
+		return false
+	})
 	out := make([]string, 0, len(parts))
 	for _, part := range parts {
 		if part = strings.TrimSpace(part); part != "" {
@@ -255,6 +274,12 @@ func splitArtists(value string) []string {
 		}
 	}
 	return out
+}
+
+func splitProviderIDs(value string) []string {
+	return strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == '，' || r == '&' || r == '、' || r == '|' || r == ';'
+	})
 }
 
 func rawID(value json.RawMessage) string {

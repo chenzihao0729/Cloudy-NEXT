@@ -568,16 +568,19 @@ func (a *app) trackRowsGrouped(c *ui.Context, tracks []netease.Track, groups []a
 				})
 			})
 			if wide {
-				// As quiet as the artists under the title, a column of the
-				// list rather than a word floating in it; brighter as the row
-				// is looked at.
+				// As quiet as the artists under the title, brightening only
+				// under its own pointer rather than with the whole song row.
+				clickable := !batch && tr.Album.Name != "" && (tr.Album.ID > 0 || tr.Source != nil)
+				album := ui.ButtonBase(c.Key("album")).Grow(2).Basis(0).MinWidth(0).Justify(ui.Start).FocusRing(false).Label(tr.Album.Name)
+				if clickable {
+					album.Cursor(ui.CursorPointer)
+				}
 				shade := p.muted.Alpha(0.85)
-				if hovered {
+				if album.Hovered() {
 					shade = p.text.Alpha(0.85)
 				}
-				album := ui.ButtonBase(c.Key("album")).Grow(2).Basis(0).MinWidth(0).Justify(ui.Start).FocusRing(false).Label(tr.Album.Name)
 				album.Children(func() { ui.Text(c, tr.Album.Name).FontSize(12.5).TextColor(shade).SingleLine() })
-				if !batch && album.Clicked() {
+				if clickable && album.Clicked() {
 					if tr.Album.ID > 0 {
 						a.openPage(route{page: pageAlbum, id: tr.Album.ID})
 					} else if tr.Source != nil {

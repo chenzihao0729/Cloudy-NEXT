@@ -1185,7 +1185,7 @@ func (a *app) settingsAboutPage(c *ui.Context, k *settingsKit) {
 	})
 	if a.updates {
 		k.group(c, "更新", func() {
-			desc := "每次启动时检查是否有新版本"
+			desc := "启动时立即检查是否有新版本"
 			if s.UpdateChecked > 0 {
 				desc += "；上次检查：" + commentTime(time.Unix(s.UpdateChecked, 0), time.Now())
 			}

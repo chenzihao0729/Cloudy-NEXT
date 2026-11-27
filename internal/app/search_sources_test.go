@@ -77,6 +77,19 @@ func TestSearchRecordingMerge(t *testing.T) {
 	}
 }
 
+// A provider that combines performers with Chinese punctuation still merges
+// with a catalog that returns the same performers as separate credits.
+func TestSearchRecordingMergeSplitsChineseArtistSeparators(t *testing.T) {
+	combined := netease.Track{ID: 1, Name: "合唱", Artists: []netease.Artist{{Name: "甲、乙"}}, Album: netease.Album{Name: "专辑"}, Duration: 200_000}
+	separate := providerTrack("tx", sourcecatalog.Song{ID: "tx", Name: "合唱", Artists: []string{"甲，乙"}, Album: "专辑", Duration: 200 * time.Second})
+	if len(separate.Artists) != 2 || !sameSearchRecording(combined, separate) {
+		t.Fatalf("artists were not normalized: combined=%+v separate=%+v", combined.Artists, separate.Artists)
+	}
+	if got := expandedArtists([]netease.Artist{{Name: "AC/DC"}}); len(got) != 1 || got[0].Name != "AC/DC" {
+		t.Fatalf("a real artist name was split: %+v", got)
+	}
+}
+
 // A failed provider preserves successful results and retries its own page without duplicating rows.
 // Catalog subtitles previously split the same Mayday recording into separate rows.
 func TestSearchRecordingSubtitleMerge(t *testing.T) {
@@ -129,6 +142,20 @@ func TestMultiSearchPartialFailureAndPagination(t *testing.T) {
 	}
 }
 
+// Generated short-video sounds are not music results, while ordinary
+// soundtrack titles containing the same word remain searchable.
+func TestMultiSearchHidesGeneratedOriginalSound(t *testing.T) {
+	d := &searchData{multi: &multiSearch{providers: map[string]*providerSearch{"wy": {next: 1, more: true}}, seen: map[int64]bool{}}}
+	answer := searchAnswer{songs: []netease.Track{
+		{ID: 1, Name: "@于冬然创作的原声", Artists: []netease.Artist{{Name: "于冬然"}}},
+		{ID: 2, Name: "电影原声", Artists: []netease.Artist{{Name: "于冬然"}}},
+	}}
+	applySearchAnswers("于冬然", d, []searchRequestPage{{"wy", 1}}, map[string]searchAnswer{"wy": answer})
+	if len(d.res.Songs) != 1 || d.res.Songs[0].ID != 2 {
+		t.Fatalf("search results = %+v", d.res.Songs)
+	}
+}
+
 // Provider songs retain distinct identities and resolution fields after queue serialization.
 func TestProviderTrackIdentitySurvivesSession(t *testing.T) {
 	song := sourcecatalog.Song{ID: "123", MID: "mid", MediaMID: "media", Hash: "hash", Name: "song"}
@@ -169,6 +196,18 @@ func TestMultiSearchRanking(t *testing.T) {
 	}
 }
 
+// A catalogued Kuwo recording with an album sorts above an incomplete legacy
+// upload that would otherwise look like the same exact title.
+func TestMultiSearchDemotesIncompleteKuwoRows(t *testing.T) {
+	incomplete := providerTrack("kw", sourcecatalog.Song{ID: "upload", Name: "花海", Artists: []string{"周杰伦"}})
+	complete := providerTrack("kw", sourcecatalog.Song{ID: "catalog", Name: "花海", Artists: []string{"周杰伦"}, Album: "魔杰座"})
+	rows := []netease.Track{incomplete, complete}
+	sortSearchBatch("花海", rows)
+	if rows[0].Source.ID != "catalog" {
+		t.Fatalf("incomplete Kuwo upload ranked first: %+v", rows)
+	}
+}
+
 // A provider row double-click plays its original identity without exposing NetEase-only actions.
 // Explicit same-title cover credits promote the credited performer across providers.
 func TestSearchCreditsPromoteCreditedArtist(t *testing.T) {
@@ -202,6 +241,30 @@ func TestSearchAlbumColumnsAlignAcrossProviders(t *testing.T) {
 	}
 	if wy.X != tx.X {
 		t.Fatalf("album column differs: %v vs %v", wy.X, tx.X)
+	}
+	tt.Move(tx.X+tx.W/2, tx.Y+tx.H/2)
+	tt.Frame()
+	if got := tt.Cursor(); got != ui.CursorPointer {
+		t.Fatalf("clickable album cursor = %v, want pointer", got)
+	}
+}
+
+// An external row with no album has no invisible album action or pointer.
+func TestSearchMissingAlbumIsNotClickable(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.route = route{page: pageSearch}
+	track := providerTrack("kw", sourcecatalog.Song{ID: "kw", Name: "歌曲", Artists: []string{"歌手"}})
+	tt := ui.NewTester(func(c *ui.Context) {
+		a.pal = paletteFor(c.Theme())
+		a.trackRows(c, []netease.Track{track}, true, func(*ui.Context) {})
+	}, 1200, 800)
+	tt.Frame()
+	// The blank album column occupies this area, but it must not advertise an action.
+	tt.Move(850, 55)
+	tt.Frame()
+	if got := tt.Cursor(); got == ui.CursorPointer {
+		t.Fatalf("missing album cursor = %v, want non-pointer", got)
 	}
 }
 

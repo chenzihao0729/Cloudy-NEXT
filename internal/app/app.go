@@ -44,6 +44,7 @@ const (
 
 type route struct {
 	sourceID string
+	platform string
 
 	page pageKind
 	// id is the playlist, artist, album, user or podcast the page shows.
@@ -597,8 +598,8 @@ func Run() error {
 				a.readSysAccent()
 			})
 		})
-		// A version that came out since the app last ran shows soon after
-		// it opens, and one a day after that, if the listener asks for it.
+		// A version that came out since the app last ran is checked as it
+		// opens, on every launch, if the listener asks for it.
 		a.noteVersion(mygo.App.Version())
 		go a.autoCheckUpdates()
 		if shotHook != nil {

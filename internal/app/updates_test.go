@@ -57,7 +57,7 @@ func TestUpdateSettings(t *testing.T) {
 	if !a.settings.UpdateInstall {
 		t.Fatal("still asks before installing updates")
 	}
-	toggle("提醒新版本", "每次启动时检查是否有新版本")
+	toggle("提醒新版本", "启动时立即检查是否有新版本")
 	if a.settings.UpdateChecks {
 		t.Fatal("checks for updates still")
 	}

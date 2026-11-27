@@ -22,7 +22,7 @@ import (
 func (a *app) artistLinks(c *ui.Context, tr *netease.Track, color, hover ui.Color, album ...bool) ui.Element {
 	podcast := route{page: pagePodcast, id: tr.PodcastID}
 	return ui.RichText(c).TextColor(color).Children(func() {
-		for i, ar := range tr.Artists {
+		for i, ar := range expandedArtists(tr.Artists) {
 			if i > 0 {
 				ui.Text(c, ", ")
 			}
@@ -61,12 +61,32 @@ var openQQSongArtist = (*app).openQQArtistForSong
 // Resolve the recording first; a same-name singer alone is not sufficient
 // evidence to redirect an external recording to a NetEase artist page.
 func (a *app) openQQArtistForSong(song netease.Track, artist netease.Artist) {
+	platform := "tx"
+	if song.Source != nil && (song.Source.Platform == "kw" || song.Source.Platform == "kg" || song.Source.Platform == "mg") {
+		platform = song.Source.Platform
+	}
+	if platform != "tx" && artist.SourceMID != "" {
+		a.openPage(route{page: pageQQArtist, platform: platform, sourceID: artist.SourceMID, query: artist.Name})
+		return
+	}
 	from := a.route
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		if artist.SourceMID == "" {
-			rows, _ := qqmusic.Search(ctx, song.Name+" "+artist.Name, 10)
+			var rows []sourcecatalog.Song
+			if platform == "kg" && song.Source != nil && song.Source.Hash != "" {
+				artist.SourceMID, _ = sourcecatalog.KugouArtistID(ctx, song.Source.Hash, artist.Name)
+			} else if platform == "kw" {
+				artist.SourceMID, _ = sourcecatalog.KuwoArtistID(ctx, artist.Name)
+			} else if platform != "tx" {
+				rows, _ = sourcecatalog.Search(ctx, platform, song.Name+" "+artist.Name, 10)
+			} else {
+				found, _ := qqmusic.Search(ctx, song.Name+" "+artist.Name, 10)
+				for _, row := range found {
+					rows = append(rows, sourcecatalog.Song{Name: row.Name, Artists: row.Artists, ArtistMIDs: row.ArtistMIDs})
+				}
+			}
 			for _, row := range rows {
 				if sourcecatalog.NormalizeTitle(row.Name) != sourcecatalog.NormalizeTitle(song.Name) {
 					continue
@@ -81,6 +101,20 @@ func (a *app) openQQArtistForSong(song netease.Track, artist netease.Artist) {
 					break
 				}
 			}
+		}
+		if platform != "tx" {
+			a.post(func() {
+				if a.route != from {
+					return
+				}
+				if artist.SourceMID == "" {
+					a.toast = "未能确认该歌手的" + platformName(platform) + "身份，请重试"
+					a.redraw()
+					return
+				}
+				a.openPage(route{page: pageQQArtist, platform: platform, sourceID: artist.SourceMID, query: artist.Name})
+			})
+			return
 		}
 		result, err := qqArtistNetEaseSearch(ctx, song.Name+" "+artist.Name, netease.SearchSongs, 20, 0)
 		var id int64

@@ -1,12 +1,46 @@
 package app
 
 import (
+	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/sourcecatalog"
 	"netease-music-mygo/internal/sourceplugin"
 )
+
+// A catalog search that cannot find a parenthesized language label retries
+// the base title and resolves the otherwise identical recording.
+func TestPluginSearchFallsBackFromLanguageEditionSuffix(t *testing.T) {
+	realSearch := searchSource
+	defer func() { searchSource = realSearch }()
+	var queries []string
+	searchSource = func(_ context.Context, platform, query string, _ int) ([]sourcecatalog.Song, error) {
+		queries = append(queries, platform+":"+query)
+		if query == "你的意义 歌手" {
+			return []sourcecatalog.Song{{ID: "tx-id", MID: "tx-id", Name: "你的意义", Artists: []string{"歌手"}, Album: "你的意义", Duration: 4 * time.Minute}}, nil
+		}
+		return nil, nil
+	}
+	m := newSourceManager()
+	script := `module.exports={sources:{tx:{name:"QQ音乐"}},musicUrl:async(source,info)=>"https://audio.example/"+info.id};`
+	info, err := sourceplugin.Validate(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.configure(script, info, true)
+	defer m.close()
+	track := netease.Track{ID: 7, Name: "你的意义(中文版)", Artists: []netease.Artist{{Name: "歌手"}}, Album: netease.Album{Name: "你的意义"}, Duration: 240_000}
+	stream, err := m.Resolve(context.Background(), track, "exhigh", nil)
+	if err != nil || stream.URL != "https://audio.example/tx-id" {
+		t.Fatalf("fallback resolve = %+v, %v; queries %q", stream, err, queries)
+	}
+	if !strings.Contains(strings.Join(queries, "\n"), "tx:你的意义 歌手") {
+		t.Fatalf("base-title query was not tried: %q", queries)
+	}
+}
 
 // Source preference follows login and VIP status while respecting the source toggle.
 func TestPreferSourceByAccount(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 )
 
 var editionSuffix = regexp.MustCompile(`(?i)(live|现场|伴奏|instrumental|remix|dj|翻唱|cover|demo|纯音乐|acoustic|不插电)\s*版`)
+var languageEditionSuffix = regexp.MustCompile(`(?i)\s*[（(]\s*(?:中文|国语|普通话|mandarin|chinese)\s*(?:版|version)?\s*[）)]\s*$`)
 
 func Normalize(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
@@ -19,7 +20,14 @@ func Normalize(value string) string {
 }
 
 func NormalizeTitle(value string) string {
-	return Normalize(editionSuffix.ReplaceAllString(value, "$1"))
+	return Normalize(editionSuffix.ReplaceAllString(SearchTitle(value), "$1"))
+}
+
+// SearchTitle is the title worth sending to another catalog. A language
+// label such as “(中文版)” is often absent there even for the same recording;
+// artist, album and duration still have to confirm the match.
+func SearchTitle(value string) string {
+	return strings.TrimSpace(languageEditionSuffix.ReplaceAllString(value, ""))
 }
 
 func SameArtist(left, right string) bool {

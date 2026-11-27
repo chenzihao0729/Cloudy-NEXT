@@ -38,6 +38,8 @@ type sourceLogEntry struct {
 
 func newSourceManager() *sourceManager { return &sourceManager{} }
 
+var searchSource = sourcecatalog.Search
+
 func (a *app) preferSource(track netease.Track) bool {
 	if track.Source != nil {
 		return a.source != nil && a.source.isEnabled()
@@ -178,7 +180,7 @@ func (m *sourceManager) Resolve(ctx context.Context, track netease.Track, level 
 			m.addLog("info", "网易云：尝试原曲 ID "+matched.ID)
 		} else {
 			m.addLog("info", sources[platform]+"：搜索“"+query+"”")
-			candidates, searchErr := sourcecatalog.Search(ctx, platform, query, 10)
+			candidates, searchErr := searchSource(ctx, platform, query, 10)
 			if searchErr != nil {
 				m.addLog("error", sources[platform]+"搜索失败："+searchErr.Error())
 				failures = append(failures, sources[platform]+"搜索失败："+searchErr.Error())
@@ -188,11 +190,22 @@ func (m *sourceManager) Resolve(ctx context.Context, track netease.Track, level 
 			matched, ok = sourcecatalog.Match(track, candidates)
 			if !ok && strings.TrimSpace(track.Name) != "" {
 				m.addLog("info", sources[platform]+"：组合搜索未匹配，改用歌名搜索")
-				candidates, searchErr = sourcecatalog.Search(ctx, platform, track.Name, 10)
+				candidates, searchErr = searchSource(ctx, platform, track.Name, 10)
 				if searchErr == nil {
 					matched, ok = sourcecatalog.Match(track, candidates)
 				} else {
 					m.addLog("warn", sources[platform]+"歌名搜索失败："+searchErr.Error())
+				}
+			}
+			baseTitle := sourcecatalog.SearchTitle(track.Name)
+			if !ok && baseTitle != "" && baseTitle != strings.TrimSpace(track.Name) {
+				baseQuery := strings.TrimSpace(strings.Join(append([]string{baseTitle}, trackArtistNames(track)...), " "))
+				m.addLog("info", sources[platform]+"：版本后缀未匹配，改用基础歌名搜索“"+baseQuery+"”")
+				candidates, searchErr = searchSource(ctx, platform, baseQuery, 10)
+				if searchErr == nil {
+					matched, ok = sourcecatalog.Match(track, candidates)
+				} else {
+					m.addLog("warn", sources[platform]+"基础歌名搜索失败："+searchErr.Error())
 				}
 			}
 			if !ok {
@@ -261,14 +274,6 @@ func (m *sourceManager) clearLogs() {
 	m.mu.Lock()
 	m.logs = nil
 	m.mu.Unlock()
-}
-
-func trackArtistNames(track netease.Track) []string {
-	artists := make([]string, 0, len(track.Artists))
-	for _, artist := range track.Artists {
-		artists = append(artists, artist.Name)
-	}
-	return artists
 }
 
 func pluginMusicInfo(track netease.Track, artists, platform string, matched sourcecatalog.Song) map[string]any {

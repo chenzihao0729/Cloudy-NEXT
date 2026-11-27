@@ -76,7 +76,7 @@ func TestQQArtistAlbumNavigation(t *testing.T) {
 	a.settings = defaultSettings()
 	r := route{page: pageQQArtist, sourceID: "singer", query: "歌手"}
 	a.route = r
-	a.qqArtists = map[string]*qqArtistData{"singer": {tab: 1, profileLoaded: true, page: paged{loaded: true}, profile: qqmusic.ArtistProfile{Albums: []qqmusic.ArtistAlbum{{MID: "album", Name: "测试专辑"}}}}}
+	a.qqArtists = map[string]*qqArtistData{"singer": {tab: 1, profileLoaded: true, page: paged{loaded: true}, profile: sourceArtistProfile{albums: []sourceArtistAlbum{{id: "album", name: "测试专辑"}}}}}
 	a.qqAlbums = map[string]*qqAlbumData{"album": {album: &qqmusic.Album{Name: "测试专辑"}}}
 	tt := ui.NewTester(func(c *ui.Context) {
 		a.pal = paletteFor(c.Theme())
@@ -98,5 +98,53 @@ func TestQQArtistAlbumNavigation(t *testing.T) {
 	a.back()
 	if a.route != r {
 		t.Fatalf("Back did not restore artist: %+v", a.route)
+	}
+}
+
+// A Kuwo search result opens the Kuwo-backed artist page with its platform
+// identity instead of resolving the same name through QQ Music.
+func TestKuwoArtistLinkUsesKuwoIdentity(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.route = route{page: pageSearch, query: "晴天"}
+	song := providerTrack("kw", sourcecatalog.Song{ID: "228908", Name: "晴天", Artists: []string{"周杰伦"}, ArtistMIDs: []string{"336"}})
+	tt := ui.NewTester(func(c *ui.Context) {
+		a.pal = paletteFor(c.Theme())
+		if a.route.page == pageSearch {
+			a.trackRows(c, []netease.Track{song}, true, func(*ui.Context) {})
+		}
+	}, 1200, 800)
+	tt.Frame()
+	if err := tt.Click("周杰伦"); err != nil {
+		t.Fatal(err)
+	}
+	if a.route.page != pageQQArtist || a.route.platform != "kw" || a.route.sourceID != "336" {
+		t.Fatalf("wrong Kuwo artist route: %+v", a.route)
+	}
+}
+
+// Kugou and Migu search results keep their own singer identities when their
+// names open the shared in-app artist page.
+func TestKugouAndMiguArtistLinksUseProviderIdentity(t *testing.T) {
+	for _, platform := range []string{"kg", "mg"} {
+		t.Run(platform, func(t *testing.T) {
+			a := newTestApp()
+			a.settings = defaultSettings()
+			a.route = route{page: pageSearch, query: "晴天"}
+			song := providerTrack(platform, sourcecatalog.Song{ID: platform + "-song", Name: "晴天", Artists: []string{"周杰伦"}, ArtistMIDs: []string{platform + "-artist"}})
+			tt := ui.NewTester(func(c *ui.Context) {
+				a.pal = paletteFor(c.Theme())
+				if a.route.page == pageSearch {
+					a.trackRows(c, []netease.Track{song}, true, func(*ui.Context) {})
+				}
+			}, 1200, 800)
+			tt.Frame()
+			if err := tt.Click("周杰伦"); err != nil {
+				t.Fatal(err)
+			}
+			if a.route.page != pageQQArtist || a.route.platform != platform || a.route.sourceID != platform+"-artist" {
+				t.Fatalf("wrong %s artist route: %+v", platform, a.route)
+			}
+		})
 	}
 }
