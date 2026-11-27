@@ -111,8 +111,8 @@ type settings struct {
 	// the app's red: the light and the dark take their own shade of it, and
 	// the window and the sidebar a breath of it.
 	Accent string `json:"accent,omitempty"`
-	// UpdateChecks checks for new versions soon after launch and then once
-	// a day; UpdateInstall installs them without asking. UpdateChecked is
+	// UpdateChecks checks for new versions soon after every launch;
+	// UpdateInstall installs them without asking. UpdateChecked is
 	// when the app last asked for one, in Unix seconds.
 	UpdateChecks  bool  `json:"updateChecks"`
 	UpdateInstall bool  `json:"updateInstall"`

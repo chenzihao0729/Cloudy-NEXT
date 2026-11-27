@@ -180,16 +180,18 @@ func updateError(err error) string {
 	return "检查更新失败，请检查网络，或到设置里换一个下载源后重试。"
 }
 
-// autoCheckUpdates looks for updates soon after launch, and then once a day,
-// while the listener asked to be told of new versions.
+// autoCheckUpdates looks for updates soon after every launch while the
+// listener asked to be told of new versions.
 func (a *app) autoCheckUpdates() {
-	if !a.settings.UpdateChecks {
-		return
-	}
-	if last := time.Unix(a.settings.UpdateChecked, 0); time.Since(last) < 20*time.Hour {
+	if !updateCheckOnLaunch(a.settings) {
 		return
 	}
 	// Let the app open, and the first page load, before asking GitHub.
 	time.Sleep(12 * time.Second)
 	a.post(func() { a.startCheck(true) })
 }
+
+// updateCheckOnLaunch reports whether a launch checks for an update. The last
+// check time is deliberately not considered: reopening the app must check
+// again when reminders are enabled.
+func updateCheckOnLaunch(s settings) bool { return s.UpdateChecks }

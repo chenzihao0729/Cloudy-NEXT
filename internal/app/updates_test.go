@@ -57,12 +57,27 @@ func TestUpdateSettings(t *testing.T) {
 	if !a.settings.UpdateInstall {
 		t.Fatal("still asks before installing updates")
 	}
-	toggle("提醒新版本", "每天检查一次是否有新版本")
+	toggle("提醒新版本", "每次启动时检查是否有新版本")
 	if a.settings.UpdateChecks {
 		t.Fatal("checks for updates still")
 	}
 	if !tt.HasText("自动安装更新") {
 		t.Error("hides the update install preference when reminders are off")
+	}
+}
+
+// A recent successful check must not suppress the next launch's check; the
+// old 20-hour throttle made reopening the app miss a newly published version.
+func TestUpdateCheckRunsOnEveryLaunch(t *testing.T) {
+	s := defaultSettings()
+	s.UpdateChecks = true
+	s.UpdateChecked = 1 << 62 // any recorded check time, including a future clock correction
+	if !updateCheckOnLaunch(s) {
+		t.Fatal("a recent check suppressed the next launch's update check")
+	}
+	s.UpdateChecks = false
+	if updateCheckOnLaunch(s) {
+		t.Fatal("checked on launch while update reminders were disabled")
 	}
 }
 
