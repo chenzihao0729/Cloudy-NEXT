@@ -122,6 +122,9 @@ func (p *Player) level() string {
 // only the .lrc beside it, if any, or those written into it, which is also
 // what a downloaded song falls back to offline, or when NetEase has none.
 func fetchLyrics(t netease.Track) []lyrics.Line {
+	if lines := ownLyrics(t); len(lines) > 0 {
+		return lines
+	}
 	var lines []lyrics.Line
 	if t.Source != nil && t.Source.LyricURL != "" {
 		if b, err := netease.Fetch(t.Source.LyricURL); err == nil {
@@ -147,6 +150,18 @@ func fetchLyrics(t netease.Track) []lyrics.Line {
 	return lines
 }
 
+// OwnLyrics, if set, returns the lyrics the listener chose for t, an .lrc
+// file of their own (1.4.0): they go before any other, and are not swapped
+// for words found elsewhere. None if none was chosen.
+var OwnLyrics func(t netease.Track) []lyrics.Line
+
+func ownLyrics(t netease.Track) []lyrics.Line {
+	if OwnLyrics == nil {
+		return nil
+	}
+	return OwnLyrics(t)
+}
+
 // MoreWords, if set, finds word-timed lyrics of t elsewhere, for songs
 // NetEase has only line-timed lyrics of; none if it finds none.
 var MoreWords func(t netease.Track) []lyrics.Line
@@ -154,7 +169,7 @@ var MoreWords func(t netease.Track) []lyrics.Line
 // wantsMoreWords reports whether lines of t are timed only by line, their
 // words running at one pace, and so worth looking for elsewhere.
 func wantsMoreWords(t netease.Track, lines []lyrics.Line) bool {
-	return MoreWords != nil && t.ID > 0 && t.ProgramID == 0 && len(lines) > 0 && !lyrics.IsPlain(lines) && !anyTimed(lines)
+	return MoreWords != nil && t.ID > 0 && t.ProgramID == 0 && len(lines) > 0 && !lyrics.IsPlain(lines) && !anyTimed(lines) && len(ownLyrics(t)) == 0
 }
 
 // wantsFoundLyrics reports whether t, a song of the listener's cloud drive

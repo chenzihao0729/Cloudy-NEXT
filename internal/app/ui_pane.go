@@ -117,6 +117,8 @@ type paneMenu struct {
 	from     ui.Rect   // what it grows out of: its button, or a little of itself round the pointer
 	fromR    float32   // the corner radius of from
 	source   uint64    // the element pressed for it with the secondary button, which keeps its hover
+	src      ui.Handle // that element, to close the menu once it moves, as its list scrolls
+	srcAt    ui.Rect   // where it was laid out as the menu opened
 	natural  float32   // how tall the page showing is, laid out, for the pane to ease to as pages change
 	rise     bool      // it opened upward from up, chosen as it opened
 	page     string    // the page showing: "" the menu, else the label of its sub
@@ -248,7 +250,17 @@ func (a *app) menuBelow(b ui.Element, onDark bool, groups [][]menuAction, head f
 
 // contextMenu opens a menu where the secondary button presses el.
 func (a *app) contextMenu(el ui.Element, onDark bool, groups func() [][]menuAction, head func(c *ui.Context, ink paneInk)) {
+	if a.menu.open && a.menu.source != 0 && a.menu.source == el.ID() {
+		el.Bind(&a.menu.src) // each frame, to find it where it is now
+	}
 	if !el.RightClicked() {
+		return
+	}
+	// A second right click closes the menu open, wherever it lands, rather
+	// than open another (1.3.12, the user's ask): the press closed it as a
+	// press outside, just now, or it is still open, its overlay built later.
+	if a.menu.open || time.Since(a.menu.closedAt) < 300*time.Millisecond {
+		a.menu.open, a.menu.closedAt = false, time.Now()
 		return
 	}
 	// Asked only now: an element asking for the pointer is built each time
@@ -257,6 +269,7 @@ func (a *app) contextMenu(el ui.Element, onDark bool, groups func() [][]menuActi
 	r := el.Bounds()
 	a.openMenu(r.X+x, r.Y+y, r.Y+y, onDark, groups(), head)
 	a.menu.source = el.ID()
+	el.Bind(&a.menu.src)
 }
 
 // menuOverlay builds the menu open, if one is: grown out of the button that
@@ -271,6 +284,23 @@ func (a *app) menuOverlay(c *ui.Context) {
 	w, h := c.Size()
 	ink := a.inkOn(m.onDark)
 	x, y := m.at.X, m.at.Y
+	if m.open && m.source != 0 {
+		// What it was opened on moved, or left: its list scrolled, under
+		// the wheel. The menu goes, as a context menu does (1.3.12).
+		// Laid out, not as posed: a row easing in as its page does moves
+		// by its pose, which is no scroll.
+		e := c.Resolve(m.src)
+		// Gone is not moved: the bar's cover is another as the song
+		// changes, its menu still for the song it opened on. A row
+		// scrolled out of its list moved on its way out.
+		if b := e.LayoutBounds(); e.Valid() && b.H > 0 {
+			if m.srcAt.H == 0 {
+				m.srcAt = b
+			} else if abs32(b.Y-m.srcAt.Y) > 2 || abs32(b.X-m.srcAt.X) > 2 {
+				m.open, m.closedAt = false, time.Now()
+			}
+		}
+	}
 	if m.open {
 		var button ui.Rect
 		if m.anchored {
@@ -303,10 +333,11 @@ func (a *app) menuOverlay(c *ui.Context) {
 			m.from, m.fromR = button, min(min(button.W, button.H)/2, 14)
 		} else {
 			// Out of the pointer: a little of itself round it, as the
-			// menus grew.
+			// menus grew. Risen, it grows up out of where it rose from,
+			// pushed down from the window's top or not.
 			ox, oy := m.x, m.y
-			if y != m.y {
-				oy = y + tall
+			if m.rise {
+				oy = m.up
 			}
 			const s = 0.86
 			m.from = ui.Rect{X: ox + (x-ox)*s, Y: oy + (y-oy)*s, W: menuWidth * s, H: tall * s}

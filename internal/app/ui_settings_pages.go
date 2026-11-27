@@ -294,8 +294,9 @@ func (a *app) settingsNowPlayingPage(c *ui.Context, k *settingsKit) {
 func (a *app) settingsLyricsPage(c *ui.Context, k *settingsKit) {
 	s := &a.settings
 	k.group(c, "歌词内容", func() {
-		k.row(c, "歌词翻译", "播放栏的翻译按钮也能切换", func() {
-			k.toggle(c, "lyric-trans", "歌词翻译", &s.LyricTrans, false, nil)
+		k.row(c, "原文下方", "意译是翻译，音译是日语、韩语等的读音；播放页歌词上方和播放栏的翻译按钮也能切换", func() {
+			under := a.lyricUnder()
+			a.segmentedControl(c.Key("lyric-under"), &under, lyricUnderLabels, true, a.setLyricUnder)
 		})
 		k.row(c, "逐字高亮", "唱到哪个字亮到哪个字；关闭后整行一起亮起", func() {
 			words := !s.NpWholeLines

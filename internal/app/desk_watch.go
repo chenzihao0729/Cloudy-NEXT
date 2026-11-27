@@ -33,6 +33,7 @@ type deskState struct {
 	// over whether the pointer is over the lyrics, which shows it; through
 	// that the window lets the pointer through, being away from both.
 	toolsAt  ui.Rect
+	moves    int // the listener's moves of the window, for deskSettleSoon
 	over     bool
 	through  bool
 	moreWin  *mygo.Window
@@ -95,7 +96,7 @@ func (a *app) deskTick() {
 	}
 	if now.Sub(a.desk.checked) >= time.Second {
 		a.desk.checked = now
-		if covered := !s.DeskOverFullscreen && fullscreenInFront(); covered != a.desk.covered {
+		if covered := !s.DeskOverFullscreen && fullscreenInFront(w.NativeHandle()); covered != a.desk.covered {
 			a.desk.covered = covered
 			a.applyDeskLyrics()
 		}

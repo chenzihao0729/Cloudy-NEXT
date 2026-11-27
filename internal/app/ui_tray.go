@@ -33,6 +33,7 @@ var trayGlass = func(a *app) bool { return a.settings.glassIn(sceneMenu) }
 var (
 	trayHost          = trayHostAtCursor
 	trayCaptureBehind = captureBehind
+	trayPlace         = trayPlaceAtCursor
 )
 
 // trayPopupPos places the outer flyout window (including its trayPopupMargin
@@ -63,6 +64,16 @@ func trayPopupPos(click mygo.Point, win, mon mygo.Rectangle) mygo.Point {
 
 	return mygo.Point{X: winX, Y: winY}
 }
+
+// trayLocal turns a click at (cx, cy) pixels into a monitor of w×h pixels at
+// dpi into DIPs with the monitor at the origin, for trayPopupPos.
+func trayLocal(cx, cy, w, h int32, dpi int) (mygo.Point, mygo.Rectangle) {
+	d := func(v int32) int { return (int(v)*96 + dpi/2) / dpi }
+	return mygo.Point{X: d(cx), Y: d(cy)}, mygo.Rectangle{Width: d(w), Height: d(h)}
+}
+
+// trayPx turns DIPs back into pixels at dpi.
+func trayPx(v, dpi int) int { return (v*dpi + 48) / 96 }
 
 func trayPopupOrigin(click, pos mygo.Point) ui.Point {
 	cardW := float32(trayPopupWidth - 2*trayPopupMargin)
@@ -140,7 +151,13 @@ func (a *app) toggleTrayPopup() {
 		}
 	})
 	a.trayPopup = w
-	if hasClick {
+	var hwnd uintptr
+	if h, ok := w.(interface{ NativeHandle() uintptr }); ok {
+		hwnd = h.NativeHandle()
+	}
+	if origin, ok := trayPlace(hwnd); ok {
+		a.trayPopupOrigin = origin
+	} else if hasClick {
 		if p, ok := w.(interface {
 			Bounds() mygo.Rectangle
 			SetPosition(x, y int)
@@ -154,10 +171,6 @@ func (a *app) toggleTrayPopup() {
 		}
 	}
 	w.Show()
-	var hwnd uintptr
-	if h, ok := w.(interface{ NativeHandle() uintptr }); ok {
-		hwnd = h.NativeHandle()
-	}
 	if crop != nil {
 		if img := crop(hwnd); img != nil {
 			a.trayBackdrop = ui.NewBitmap(img)

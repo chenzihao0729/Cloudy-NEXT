@@ -308,6 +308,16 @@ func (a *app) lyricTools(c *ui.Context, id int64, at ui.Rect) {
 			a.lyricWheelOn(value, "滚动滚轮微调歌词时间，点击复位", func(n int) { move(n * 10) })
 			chip("earlier", "歌词提前 0.1 秒", 44, false, func() { move(100) }, word("提前", 13))
 		})
+		// What shows under each line: the one or the other (1.4.0).
+		group("under", func() {
+			at := a.lyricUnder()
+			for i, l := range lyricUnderLabels {
+				b := chip("under-"+l, "原文下方显示"+l, 44, i == at, func() { a.setLyricUnder(i) }, word(l, 13))
+				if i == at {
+					b.Background(white.Alpha(0.14))
+				}
+			}
+		})
 		// The rest of the lyrics' settings, in the settings.
 		group("more", func() {
 			chip("more", "更多歌词设置", 30, false, func() { a.openSettingsAt(settingsLyrics) }, func(fg ui.Color) ui.Element {

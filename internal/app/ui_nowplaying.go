@@ -1017,6 +1017,9 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 						})
 						if l.Translation != "" && a.settings.LyricTrans {
 							ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.7))
+						} else if l.Roman != "" && a.settings.LyricRoman {
+							// How it reads, where the translation goes (1.4.0).
+							ui.Text(c.Key("roman"), l.Roman).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.7))
 						}
 					})
 				})
@@ -1036,7 +1039,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	// The regular view too: the comments drawer narrows and widens the
 	// pane, the lines wrap again, and the offset kept would show lines not
 	// sung yet until the next one came (#56).
-	focus := lyricFocus{st.focusY, box.W, box.H, st.size, st.tilt, a.lyricFamily(), a.settings.LyricTrans}
+	focus := lyricFocus{st.focusY, box.W, box.H, st.size, st.tilt, a.lyricFamily(), a.settings.LyricTrans, a.settings.LyricRoman}
 	// Wait for layout to take the new padding or type size before measuring the target.
 	if focus != a.lyricGlide.focus {
 		a.lyricGlide.focus = focus
@@ -1078,7 +1081,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 type lyricFocus struct {
 	y, width, height, size, tilt float32
 	font                         string
-	translation                  bool
+	translation, roman           bool
 }
 
 // lyricGlide scrolls the lyrics to the line sung with a damped spring.

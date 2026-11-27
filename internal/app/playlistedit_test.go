@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -388,5 +389,50 @@ func TestQueueEmptyPlaysAPlaylist(t *testing.T) {
 	tt.Advance(time.Second)
 	if cur := a.pl.Current(); cur == nil || cur.ID != 1 || len(a.pl.Queue()) != 2 {
 		t.Fatalf("playing %v of %d", cur, len(a.pl.Queue()))
+	}
+}
+
+// A song's menu goes on a second right click, rather than open again
+// where it lands, and once the list under it scrolls (1.3.12).
+func TestSongMenuClosesOnRightClickAndScroll(t *testing.T) {
+	a := editTestApp()
+	pl := a.playlists[10]
+	for i := 0; i < 80; i++ {
+		pl.Tracks = append(pl.Tracks, netease.Track{ID: int64(100 + i), Name: fmt.Sprintf("填充%d", i), Duration: 200000})
+	}
+	tt := ui.NewTester(a.view, 1200, 800)
+	tt.Frame()
+	settle := func() {
+		for i := 0; i < 30; i++ {
+			tt.Advance(16 * time.Millisecond)
+			tt.Frame()
+		}
+	}
+	if err := tt.RightClick("宝船"); err != nil {
+		t.Fatal(err)
+	}
+	settle()
+	if !a.menu.open {
+		t.Fatal("a right click did not open the song's menu")
+	}
+	if err := tt.RightClick("填充2"); err != nil {
+		t.Fatal(err)
+	}
+	settle()
+	if a.menu.open {
+		t.Fatal("a second right click opened another menu rather than close it")
+	}
+	if err := tt.RightClick("填充2"); err != nil {
+		t.Fatal(err)
+	}
+	settle()
+	if !a.menu.open {
+		t.Fatal("a right click after the menu closed did not open it again")
+	}
+	r, _ := tt.Find("填充3")
+	tt.Wheel(r.X+r.W/2, r.Y+r.H/2, 0, 240)
+	settle()
+	if a.menu.open {
+		t.Error("the menu stayed open as the list scrolled")
 	}
 }

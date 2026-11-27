@@ -20,8 +20,10 @@ var (
 // screen. Windows says so of the desktop too, which the app's window
 // minimized or left behind often hands the front to: the lyrics hid as
 // soon as the app did (#67, found by jiangpiguai). The app's own full
-// screen is left out.
-func fullscreenInFront() bool {
+// screen is left out, and so is one on another monitor than the lyrics'
+// window desk (0: any): a game on the main screen hid the lyrics kept on
+// the second one (a viewer's comment, 2026-11-26).
+func fullscreenInFront(desk uintptr) bool {
 	if procSHQueryUserNotificationState.Find() != nil {
 		return false
 	}
@@ -62,6 +64,11 @@ func fullscreenInFront() bool {
 		return false
 	}
 	mon, _, _ := procMonitorFromWindowDesk.Call(hwnd, 2 /* nearest */)
+	if desk != 0 {
+		if own, _, _ := procMonitorFromWindowDesk.Call(desk, 2 /* nearest */); own != 0 && own != mon {
+			return false
+		}
+	}
 	var mi struct {
 		size          uint32
 		monitor, work trayRect

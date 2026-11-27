@@ -240,6 +240,13 @@ func (a *app) growPane(c *ui.Context, s growSpec, fill func(body ui.Element)) (s
 		fill(body)
 		if b := body.LayoutBounds(); b.H > 0 {
 			g.h, g.ready = b.H, true
+			if s.full.H > 0 && s.rest > full.H {
+				// Resting on its bottom, the body is as tall as rest, not
+				// the pane: the pane is as tall as it was asked to be. A
+				// risen menu took the window's height for its own and grew
+				// out of a box down to the window's bottom (1.3.12).
+				g.h = full.H
+			}
 		}
 		if !s.open {
 			// Going, it takes the presses that would reach its rows,

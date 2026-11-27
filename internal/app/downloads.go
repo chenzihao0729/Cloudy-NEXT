@@ -753,7 +753,7 @@ func (a *app) downloadedSongActions(tr *netease.Track) [][]menuAction {
 		},
 		{{label: "在文件夹中显示", icon: iconFolder, do: func() { mygo.Shell.ShowItemInFolder(tr.LocalPath) }}},
 	}
-	groups = append(groups, []menuAction{{label: "下载歌词", icon: iconLyrics, do: func() { a.openLyricDownload(song) }}})
+	groups = append(groups, append([]menuAction{{label: "下载歌词", icon: iconLyrics, do: func() { a.openLyricDownload(song) }}}, a.ownLyricsActions(song)...))
 	if tr.LocalPath != "" {
 		groups = append(groups, a.ownCoverActions(ownSongKey(tr.LocalPath), tr.LocalPath))
 	}

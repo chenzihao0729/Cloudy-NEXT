@@ -36,6 +36,12 @@ var (
 type trayPoint struct{ x, y int32 }
 type trayRect struct{ left, top, right, bottom int32 }
 
+// mouseHeld reports whether the left mouse button is down, as in a drag.
+func mouseHeld() bool {
+	r, _, _ := procGetAsyncKeyState.Call(0x01)
+	return r&0x8000 != 0
+}
+
 func cursorPos() trayPoint {
 	var pt trayPoint
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))

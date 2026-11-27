@@ -12,12 +12,38 @@ import (
 // which, as the player bar's button does.
 func (a *app) toggleLyricTrans() {
 	a.settings.LyricTrans = !a.settings.LyricTrans
+	if a.settings.LyricTrans {
+		a.settings.LyricRoman = false // the one or the other under a line
+	}
 	a.changed()
 	if a.settings.LyricTrans {
 		a.say("lyric-trans", "已显示歌词翻译")
 	} else {
 		a.say("lyric-trans", "已隐藏歌词翻译")
 	}
+	a.redraw()
+}
+
+// lyricUnder is what shows under each line of the lyrics on Now Playing
+// (lyricUnderLabels): nothing, its translation (意译) or how it reads
+// (音译), in the one place (1.4.0, the user's ask).
+func (a *app) lyricUnder() int {
+	switch s := &a.settings; {
+	case s.LyricTrans:
+		return 1
+	case s.LyricRoman:
+		return 2
+	}
+	return 0
+}
+
+var lyricUnderLabels = []string{"原文", "意译", "音译"}
+
+// setLyricUnder shows i of lyricUnderLabels under each line.
+func (a *app) setLyricUnder(i int) {
+	s := &a.settings
+	s.LyricTrans, s.LyricRoman = i == 1, i == 2
+	a.changed()
 	a.redraw()
 }
 

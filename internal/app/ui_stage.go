@@ -159,6 +159,8 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 			ui.Column(c).Absolute().Left(0).Right(0).Bottom(24).AlignItems(ui.Center).Gap(8).PassThrough().Children(func() {
 				if cur >= 0 && lines[cur].Translation != "" && a.settings.LyricTrans {
 					ui.Text(c.Key("translation"), lines[cur].Translation).FontSize(18).FontWeight(600).TextColor(white.Alpha(0.72)).TextAlign(ui.Center)
+				} else if cur >= 0 && lines[cur].Roman != "" && a.settings.LyricRoman {
+					ui.Text(c.Key("roman"), lines[cur].Roman).FontSize(18).FontWeight(600).TextColor(white.Alpha(0.72)).TextAlign(ui.Center)
 				}
 				if cur+1 < len(lines) {
 					ui.Text(c.Key("next"), lines[cur+1].Text).FontSize(14).TextColor(white.Alpha(0.32)).TextAlign(ui.Center).SingleLine()

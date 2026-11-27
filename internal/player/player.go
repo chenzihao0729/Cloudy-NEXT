@@ -1461,6 +1461,26 @@ func (p *Player) RefreshCover() {
 	}()
 }
 
+// ReloadLyrics fetches the lyrics of what plays again, as the listener
+// chose lyrics of their own for it or put them away.
+func (p *Player) ReloadLyrics() {
+	if p.track == nil {
+		return
+	}
+	t, gen := *p.track, p.gen
+	go func() {
+		lines := fetchLyrics(t)
+		p.post(func() {
+			if gen == p.gen {
+				p.lyrics, p.lyricsLoaded = lines, true
+				if p.Changed != nil {
+					p.Changed()
+				}
+			}
+		})
+	}()
+}
+
 func (p *Player) Requality() {
 	if p.track == nil || p.track.LocalPath != "" || p.at < 0 || p.at >= len(p.order) {
 		return

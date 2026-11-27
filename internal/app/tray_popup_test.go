@@ -420,3 +420,21 @@ func TestTrayPopupEnterMotion(t *testing.T) {
 		}
 	}
 }
+
+// Issue #73: on a second monitor at another scale the menu was measured in
+// one monitor's DIPs and placed in another's. Placed in the pixels of the
+// monitor under the cursor, it opens above a click on its taskbar, whole.
+func TestTrayMenuPlacedInTheClickedMonitorsPixels(t *testing.T) {
+	for _, dpi := range []int{96, 120, 144, 192} {
+		// A click on the taskbar, 20 px above the bottom of a 2560×1440 monitor.
+		click, mon := trayLocal(1200, 1420, 2560, 1440, dpi)
+		pos := trayPopupPos(click, mygo.Rectangle{Width: trayPopupWidth, Height: trayPopupHeight}, mon)
+		top, bottom := trayPx(pos.Y, dpi), trayPx(pos.Y+trayPopupHeight, dpi)
+		if top < 0 || bottom > 1440 {
+			t.Fatalf("dpi %d: menu %d..%d px, outside the monitor's 0..1440", dpi, top, bottom)
+		}
+		if cardBottom := trayPx(pos.Y+trayPopupHeight-trayPopupMargin, dpi); cardBottom > 1420 {
+			t.Fatalf("dpi %d: card ends at %d px, below the click at 1420", dpi, cardBottom)
+		}
+	}
+}

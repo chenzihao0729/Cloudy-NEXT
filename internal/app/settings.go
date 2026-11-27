@@ -297,6 +297,9 @@ type settings struct {
 	// LyricTrans shows the translation under each line of lyrics. Off is
 	// kept too.
 	LyricTrans bool `json:"lyricTrans"`
+	// LyricRoman shows over each line how it reads in Latin letters (音译),
+	// as the desktop lyrics do (DeskRoman), for the lyrics that have it.
+	LyricRoman bool `json:"lyricRoman,omitempty"`
 	// DownloadQuality is the level songs download at; empty for Quality.
 	DownloadQuality string `json:"downloadQuality,omitempty"`
 	// StartHidden opens the app to the tray, its window hidden, when it

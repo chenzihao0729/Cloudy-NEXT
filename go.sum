@@ -32,6 +32,8 @@ github.com/nya-owo/mygo v0.7.1-0.20261124172446-abfb9b4a7fec h1:ZdFaMRpMB1bNQp5O
 github.com/nya-owo/mygo v0.7.1-0.20261124172446-abfb9b4a7fec/go.mod h1:dVav53PwF2xEotjf4oA5lTY2Jp2exgzyjLhbSXhbMwE=
 github.com/nya-owo/mygo v0.7.1-0.20261125023057-28b811c76ddc h1:fkc9UAg1hHI3P8agfgatpD3Papvps0sAyzqJPo+wOo0=
 github.com/nya-owo/mygo v0.7.1-0.20261125023057-28b811c76ddc/go.mod h1:dVav53PwF2xEotjf4oA5lTY2Jp2exgzyjLhbSXhbMwE=
+github.com/nya-owo/mygo v0.7.1-0.20261126155940-4f1dc7918cdf h1:YOixwm8sHtv5H8MsYZ8fN8MrURiBRtBAkEChoUk8iZM=
+github.com/nya-owo/mygo v0.7.1-0.20261126155940-4f1dc7918cdf/go.mod h1:dVav53PwF2xEotjf4oA5lTY2Jp2exgzyjLhbSXhbMwE=
 golang.org/x/image v0.46.0 h1:b1+oYj0Jbp6K5MDT4i4/eZpYlk3V8SJhhDKh6LBHAyQ=
 golang.org/x/image v0.46.0/go.mod h1:3B3W05VGVQyuXucLINLjXKrqISASfi4Xj+iCVkLMwew=
 golang.org/x/net v0.59.0 h1:5zfYln+w5XCxwrnMMJPufRgNoXEaGxl0wo5GqPXyues=

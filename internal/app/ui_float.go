@@ -119,6 +119,7 @@ func (a *app) applyDeskLyrics() {
 				a.desk.placedSet = false
 				s.DeskX, s.DeskY = b.X, b.Y
 				a.placeDeskMore()
+				a.deskSettleSoon()
 			}
 		})
 		a.watchDesk()
@@ -227,7 +228,17 @@ func (a *app) deskFitSpot(x, y int, vertical bool) (int, int) {
 // standing: the lyrics as laid out last, and their tools over them, or as
 // they show at first if not laid out so yet.
 func (a *app) deskKeep(vertical bool, w int) ui.Rect {
-	tools := ui.Rect{X: float32(w)/2 - 60, Y: deskToolsRoom - 35, W: 120, H: 30}
+	// The whole capsule of tools, its lock and close at its ends: kept by
+	// its middle only, standing lyrics left by the screen's right edge had
+	// them off it, and could not be locked there (a viewer, 1.4.0).
+	tw := float32(300)
+	if vertical {
+		tw = 230
+	}
+	tools := ui.Rect{X: float32(w)/2 - tw/2, Y: deskToolsRoom - 35, W: tw, H: 30}
+	if t := a.desk.toolsAt; t.W > 0 && a.deskWin != nil && a.desk.vertical == vertical {
+		tools = t
+	}
 	if body := a.desk.bodyAt; body.W > 0 && a.deskWin != nil && a.desk.vertical == vertical {
 		return unionRect(body, tools)
 	}
@@ -287,6 +298,34 @@ func (a *app) turnDesk(v bool, to mygo.Rectangle) {
 	a.dropFloat(&a.deskWin)
 	a.applyDeskLyrics()
 	a.changed()
+}
+
+// deskSettleSoon brings the lyrics back on the screen, their tools whole,
+// once the listener has let go of them: dragged partly off its edge, they
+// stay where they were left as long as what of them shows is enough to
+// use. Moves of a drag come one after another: the last one settles.
+func (a *app) deskSettleSoon() {
+	a.desk.moves++
+	seq := a.desk.moves
+	var settle func()
+	settle = func() {
+		if a.deskWin == nil || a.desk.moves != seq || a.deskFly.win != nil {
+			return
+		}
+		if mouseHeld() {
+			time.AfterFunc(300*time.Millisecond, func() { mygo.RunOnMain(settle) })
+			return
+		}
+		b := a.deskWin.Bounds()
+		if x, y := a.deskFitSpot(b.X, b.Y, a.desk.vertical); x != b.X || y != b.Y {
+			a.placeDesk(x, y)
+			s := &a.settings
+			s.DeskX, s.DeskY = x, y
+			a.placeDeskMore()
+			a.changed()
+		}
+	}
+	time.AfterFunc(400*time.Millisecond, func() { mygo.RunOnMain(settle) })
 }
 
 // placeDesk moves the lyrics to x, y, for the app: where they were left is
@@ -399,7 +438,10 @@ func (a *app) deskLookOf(id string) deskLook {
 	case "color":
 		return deskLook{sung: lamp.Mix(ui.RGB(0, 0, 0), 0.1), unsung: lamp.Mix(white, 0.55), second: lamp.Mix(ui.RGB(0, 0, 0), 0.2), edge: white}
 	case "plain":
-		return deskLook{sung: lamp.Mix(white, 0.45), unsung: white.Alpha(0.62), second: white.Alpha(0.7)}
+		// The line under it in the color of the words, as the listener
+		// sets it: white, it went into white pages behind it (a viewer,
+		// 1.4.0).
+		return deskLook{sung: lamp.Mix(white, 0.45), unsung: white.Alpha(0.62), second: lamp.Mix(white, 0.45).Alpha(0.9)}
 	}
 	return deskLook{pill: ui.RGBA(16, 16, 20, 0.8), sung: lamp.Mix(white, 0.55), unsung: white.Alpha(0.5), second: white.Alpha(0.62)}
 }

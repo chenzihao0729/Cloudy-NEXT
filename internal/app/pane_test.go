@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"image"
 	"os"
 	"testing"
@@ -259,5 +260,45 @@ func TestOpenMotionFrames(t *testing.T) {
 		m := findMark(img, img.Bounds().Dx()/1100)
 		t.Logf("%3d ms  k %.4f %s diff %4d  x %6.1f y %6.1f area %6d", i*16, a.npK, fly, diff/1000, m.x, m.y, m.area)
 		tt.Advance(16 * time.Millisecond)
+	}
+}
+
+// A menu opened by the secondary button low in the window rises over the
+// pointer and grows out of it: its pane laid out against its bottom must
+// not take the window's height for its own, which grew it out of a box
+// down to the window's bottom (1.3.11, the songs of a playlist).
+func TestRisenMenuGrowsOutOfThePointer(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	tt := ui.NewTester(a.view, 1100, 760)
+	tt.Frame()
+	var acts [][]menuAction
+	for g := 0; g < 3; g++ {
+		var group []menuAction
+		for i := 0; i < 3; i++ {
+			group = append(group, menuAction{label: fmt.Sprintf("第%d组第%d项", g, i), do: func() {}})
+		}
+		acts = append(acts, group)
+	}
+	const px, py = 500, 600
+	for round := 0; round < 2; round++ { // the second opens after the first laid out
+		a.openMenu(px, py, py, false, acts, nil)
+		for i := 0; i < 12; i++ {
+			tt.Advance(16 * time.Millisecond)
+			tt.Frame()
+			if !a.menu.rise {
+				t.Fatalf("round %d: a menu %v tall at y %d did not rise", round, a.menu.at.H, py)
+			}
+			f := a.menu.from
+			if f.Y+f.H > py+1 || f.Y < py-a.menu.at.H {
+				t.Fatalf("round %d frame %d: grows from %+v, not up from the pointer at y %d (menu %+v)", round, i, f, py, a.menu.at)
+			}
+		}
+		if h := a.growKeep("menu").h; h > 600 {
+			t.Errorf("round %d: the menu took %v for its height", round, h)
+		}
+		a.menu.open = false
+		tt.Advance(time.Second)
+		tt.Frame()
 	}
 }
